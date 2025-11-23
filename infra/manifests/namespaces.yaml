@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+

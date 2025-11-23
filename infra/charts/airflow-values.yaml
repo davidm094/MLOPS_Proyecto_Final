@@ -1,0 +1,19 @@
+# Airflow Helm Chart Values
+executor: KubernetesExecutor
+
+dags:
+  gitSync:
+    enabled: true
+    repo: https://github.com/david/MLOPS_Proyecto_Final.git
+    branch: main
+    dir: apps/airflow/dags
+    subPath: ""
+
+ingress:
+  enabled: true
+  web:
+    annotations:
+      kubernetes.io/ingress.class: traefik
+    hosts:
+      - name: airflow.10.43.100.94.nip.io
+

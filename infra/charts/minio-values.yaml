@@ -1,0 +1,11 @@
+# MinIO Helm Chart Values
+auth:
+  rootUser: admin
+  rootPassword: password123
+
+defaultBuckets: "mlflow-artifacts,airflow-logs,data-raw,data-clean"
+
+persistence:
+  storageClass: "longhorn-single"
+  size: 10Gi
+

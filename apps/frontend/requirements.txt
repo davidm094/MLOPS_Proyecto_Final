@@ -1,0 +1,8 @@
+streamlit
+requests
+shap
+matplotlib
+mlflow
+pandas
+numpy
+

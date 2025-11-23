@@ -1,0 +1,23 @@
+# MLflow Helm Chart Values (Community Chart)
+backendStore:
+  postgres:
+    enabled: true
+    host: postgres-postgresql
+    port: 5432
+    database: mlflow
+    user: mlflow
+    password: mlflow-password
+
+artifactRoot: s3://mlflow-artifacts
+
+serviceAccount:
+  create: true
+  name: mlflow
+
+ingress:
+  enabled: true
+  hosts:
+    - host: mlflow.10.43.100.94.nip.io
+      paths:
+        - /
+

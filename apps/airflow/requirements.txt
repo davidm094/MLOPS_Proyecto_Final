@@ -1,0 +1,12 @@
+apache-airflow
+mlflow
+scikit-learn
+pandas
+numpy
+shap
+requests
+boto3
+psycopg2-binary
+alibi-detect
+matplotlib
+
