@@ -5,11 +5,13 @@ metadata:
   namespace: argocd
   annotations:
     kubernetes.io/ingress.class: traefik
-    # Tell Traefik the backend is HTTPS
     traefik.ingress.kubernetes.io/service.serversscheme: https
-    # Tell Traefik to allow self-signed certs from backend
     traefik.ingress.kubernetes.io/service.passhostheader: "true"
 spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - argocd.mlops.local
   rules:
   - host: argocd.mlops.local
     http:
