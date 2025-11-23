@@ -1,67 +1,9 @@
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
+apiVersion: v1
+kind: Namespace
 metadata:
+  name: metallb-system
   labels:
     app: metallb
-  name: controller
-  namespace: metallb-system
-spec:
-  allowPrivilegeEscalation: false
-  allowedCapabilities: []
-  allowedHostPaths: []
-  defaultAllowPrivilegeEscalation: false
-  fsGroup:
-    rule: RunAsAny
-  hostIPC: false
-  hostNetwork: false
-  hostPID: false
-  hostPorts: []
-  privileged: false
-  readOnlyRootFilesystem: true
-  runAsUser:
-    rule: RunAsAny
-  seLinux:
-    rule: RunAsAny
-  supplementalGroups:
-    rule: RunAsAny
-  volumes:
-  - configMap
-  - secret
-  - emptyDir
----
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
-metadata:
-  labels:
-    app: metallb
-  name: speaker
-  namespace: metallb-system
-spec:
-  allowPrivilegeEscalation: false
-  allowedCapabilities:
-  - NET_RAW
-  allowedHostPaths: []
-  defaultAllowPrivilegeEscalation: false
-  fsGroup:
-    rule: RunAsAny
-  hostIPC: false
-  hostNetwork: true
-  hostPID: false
-  hostPorts:
-  - max: 7472
-    min: 7472
-  privileged: true
-  readOnlyRootFilesystem: true
-  runAsUser:
-    rule: RunAsAny
-  seLinux:
-    rule: RunAsAny
-  supplementalGroups:
-    rule: RunAsAny
-  volumes:
-  - configMap
-  - secret
-  - emptyDir
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -107,14 +49,6 @@ rules:
   verbs:
   - create
   - patch
-- apiGroups:
-  - policy
-  resources:
-  - podsecuritypolicies
-  verbs:
-  - use
-  resourceNames:
-  - controller
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -140,14 +74,6 @@ rules:
   verbs:
   - create
   - patch
-- apiGroups:
-  - policy
-  resources:
-  - podsecuritypolicies
-  verbs:
-  - use
-  resourceNames:
-  - speaker
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
