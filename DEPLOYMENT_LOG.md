@@ -92,6 +92,14 @@
   - Display of access URLs and credentials
 
 ##### Phase 5: Documentation
+#### Phase 6: Helm Compatibility Fixes (2025-11-23 22:30 UTC)
+- Applied upstream requirements for Airflow Helm chart when using Argo CD:
+  - Disabled Helm hooks for `createUserJob` and `migrateDatabaseJob`
+  - Added `argocd.argoproj.io/hook: Sync` annotation so migrations run during every sync
+- Updated MLflow Helm values to use structured `artifactRoot.s3` block (instead of plain string) and wired S3 endpoint/credentials according to chart schema
+- Cleaned Airflow `env` section to match chart expectations (array of name/value pairs)
+- Result: Argo CD can now render both charts without schema errors and complete the sync
+
 - Completely rewrote `README.md`
   - Quick start guide
   - Architecture overview

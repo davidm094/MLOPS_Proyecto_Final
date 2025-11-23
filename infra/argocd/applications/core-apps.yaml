@@ -31,6 +31,14 @@ spec:
             value: "any"
           - name: AWS_SECRET_ACCESS_KEY
             value: "any"
+        createUserJob:
+          useHelmHooks: false
+          applyCustomEnv: false
+        migrateDatabaseJob:
+          useHelmHooks: false
+          applyCustomEnv: false
+          jobAnnotations:
+            "argocd.argoproj.io/hook": Sync
         webserver:
           service:
             type: NodePort
@@ -77,6 +85,7 @@ spec:
             bucket: mlflow-artifacts
             awsAccessKeyId: any
             awsSecretAccessKey: any
+            s3EndpointUrl: http://seaweedfs-s3.mlops.svc:8333
         serviceAccount:
           create: true
           name: mlflow

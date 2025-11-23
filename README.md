@@ -48,6 +48,8 @@ Este script:
 
 **Tiempo estimado:** 5-7 minutos
 
+> **Nota Airflow + Argo CD:** El chart oficial requiere deshabilitar los hooks de `createUserJob` y `migrateDatabaseJob` y marcar la migración con `argocd.argoproj.io/hook: Sync` para que las migraciones se ejecuten en cada sincronización. Esta configuración ya está aplicada en `infra/argocd/applications/core-apps.yaml` siguiendo la guía oficial.[^airflow-helm]
+
 ## 🌐 Acceso a Servicios
 
 Una vez completado el despliegue, los servicios están disponibles en:
@@ -291,6 +293,9 @@ docker pull davidm094/mlops-api:latest
 - [Apache Airflow](https://airflow.apache.org/)
 - [MLflow](https://mlflow.org/)
 - [SHAP (SHapley Additive exPlanations)](https://shap.readthedocs.io/)
+- [Helm Chart for Apache Airflow](https://airflow.apache.org/docs/helm-chart/stable/index.html)[^airflow-helm]
+
+[^airflow-helm]: Sección “Installing the Chart with Argo CD, Flux, Rancher or Terraform” de la documentación oficial del chart de Airflow.
 
 ## 👥 Autor
 
