@@ -8,22 +8,9 @@ metadata:
 spec:
   project: default
   source:
-    chart: traefik
-    repoURL: https://traefik.github.io/charts
-    targetRevision: 20.8.0
-    helm:
-      values: |
-        service:
-          type: ClusterIP
-        deployment:
-          kind: Deployment
-          replicas: 1
-        ports:
-          web:
-            hostPort: 80
-          websecure:
-            hostPort: 443
-        hostNetwork: true
+    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
+    targetRevision: HEAD
+    path: infra/manifests/traefik
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
