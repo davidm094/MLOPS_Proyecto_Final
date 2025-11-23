@@ -16,9 +16,8 @@ spec:
         service:
           type: ClusterIP
         deployment:
-          kind: DaemonSet
-        rollingUpdate:
-          maxUnavailable: "100%"
+          kind: Deployment
+          replicas: 1
         ports:
           web:
             hostPort: 80
