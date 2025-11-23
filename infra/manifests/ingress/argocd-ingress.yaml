@@ -4,9 +4,11 @@ metadata:
   name: argocd-server
   namespace: argocd
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
     kubernetes.io/ingress.class: traefik
-    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Tell Traefik the backend is HTTPS
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    # Tell Traefik to allow self-signed certs from backend
+    traefik.ingress.kubernetes.io/service.passhostheader: "true"
 spec:
   rules:
   - host: argocd.10.43.100.94.nip.io
@@ -19,8 +21,3 @@ spec:
             name: argocd-server
             port:
               name: https
-  tls:
-  - hosts:
-    - argocd.10.43.100.94.nip.io
-    secretName: argocd-server-tls
-
