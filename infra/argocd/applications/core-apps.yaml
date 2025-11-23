@@ -24,19 +24,18 @@ spec:
             repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
             branch: main
             subPath: apps/airflow/dags
-        extraEnv:
+        env:
           - name: AIRFLOW_VAR_S3_ENDPOINT
-            value: http://seaweedfs-s3.mlops.svc:8333
+            value: "http://seaweedfs-s3.mlops.svc:8333"
           - name: AWS_ACCESS_KEY_ID
-            value: any
+            value: "any"
           - name: AWS_SECRET_ACCESS_KEY
-            value: any
+            value: "any"
         webserver:
           service:
             type: NodePort
-            ports:
-              - port: 8080
-                nodePort: 30443
+            port: 8080
+            nodePort: 30443
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -72,19 +71,20 @@ spec:
             database: mlflow
             user: mlflow
             password: mlflow-password
-        artifactRoot: s3://mlflow-artifacts
+        artifactRoot:
+          s3:
+            enabled: true
+            bucket: mlflow-artifacts
+            awsAccessKeyId: any
+            awsSecretAccessKey: any
         serviceAccount:
           create: true
           name: mlflow
         extraEnvVars:
           - name: MLFLOW_S3_ENDPOINT_URL
-            value: http://seaweedfs-s3.mlops.svc:8333
-          - name: AWS_ACCESS_KEY_ID
-            value: any
-          - name: AWS_SECRET_ACCESS_KEY
-            value: any
+            value: "http://seaweedfs-s3.mlops.svc:8333"
           - name: AWS_DEFAULT_REGION
-            value: us-east-1
+            value: "us-east-1"
         service:
           type: NodePort
           port: 5000
