@@ -205,9 +205,11 @@ spec:
           persistence:
             enabled: true
             size: 8Gi
-        # Fix for Bitnami image pulling: Use explicit image tag if possible or check if it works.
-        # User had issues with Bitnami MinIO. Postgres might be fine or same issue.
-        # Let's force a tag if needed, but 12.12.10 chart uses a specific tag.
+          storageClass: "longhorn-single"
+        image:
+          registry: docker.io
+          repository: library/postgres
+          tag: 13-alpine
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
