@@ -1,16 +1,28 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: metallb
+  name: traefik
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
-    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
-    targetRevision: HEAD
-    path: infra/manifests/metallb
+    chart: traefik
+    repoURL: https://traefik.github.io/charts
+    targetRevision: 20.8.0
+    helm:
+      values: |
+        service:
+          type: ClusterIP
+        deployment:
+          kind: DaemonSet
+        ports:
+          web:
+            hostPort: 80
+          websecure:
+            hostPort: 443
+        hostNetwork: true
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
@@ -43,7 +55,6 @@ spec:
             repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
             branch: main
             dir: apps/airflow/dags
-        # Update Airflow to use SeaweedFS S3
         extraEnv:
           - name: AIRFLOW_VAR_S3_ENDPOINT
             value: http://seaweedfs-s3.mlops.svc:8333
@@ -51,6 +62,12 @@ spec:
             value: any
           - name: AWS_SECRET_ACCESS_KEY
             value: any
+        ingress:
+          enabled: true
+          web:
+            ingressClassName: traefik
+            hosts:
+              - name: airflow.10.43.100.94.nip.io
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -99,6 +116,13 @@ spec:
             value: any
           - name: AWS_DEFAULT_REGION
             value: us-east-1
+        ingress:
+          enabled: true
+          className: traefik
+          hosts:
+            - host: mlflow.10.43.100.94.nip.io
+              paths:
+                - /
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
