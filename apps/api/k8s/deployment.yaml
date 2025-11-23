@@ -52,10 +52,11 @@ metadata:
   labels:
     app: api
 spec:
-  type: LoadBalancer
+  type: NodePort
   ports:
   - port: 8000
     targetPort: 8000
+    nodePort: 30800
     protocol: TCP
     name: http
   selector:

@@ -10,16 +10,17 @@ fi
 echo ""
 echo "☸️  Creando nuevo cluster K3d con configuración optimizada..."
 echo "   - Traefik habilitado (integrado de K3d)"
-echo "   - Puertos mapeados: 80, 443, 8080 (Airflow), 5000 (MLflow)"
+echo "   - Puertos mapeados directamente a servicios NodePort"
 echo ""
 
+# Crear cluster con mapeo EXPLÍCITO de puertos NodePort a localhost
 k3d cluster create mlops-cluster \
     --api-port 6443 \
-    -p "80:80@loadbalancer" \
-    -p "443:443@loadbalancer" \
-    -p "8080:8080@loadbalancer" \
-    -p "5000:5000@loadbalancer" \
-    -p "8501:8501@loadbalancer" \
+    -p "30080:30080@server:0" \
+    -p "30443:30443@server:0" \
+    -p "30800:30800@server:0" \
+    -p "30500:30500@server:0" \
+    -p "30501:30501@server:0" \
     --agents 1
 
 echo ""
@@ -36,4 +37,11 @@ echo "---------------------------------------------------"
 echo "📊 Información del Cluster:"
 kubectl get nodes
 echo "---------------------------------------------------"
-
+echo ""
+echo "📝 Puertos mapeados:"
+echo "   30080 → Argo CD (HTTPS)"
+echo "   30443 → Airflow"
+echo "   30800 → API"
+echo "   30500 → MLflow"
+echo "   30501 → Frontend"
+echo "---------------------------------------------------"

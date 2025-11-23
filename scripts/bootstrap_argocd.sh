@@ -15,6 +15,10 @@ kubectl wait --for=condition=available deployment -l "app.kubernetes.io/name=arg
 # 3. Apply Root App
 kubectl apply -f infra/argocd/applications/root-app.yaml
 
+# Aplicar servicio NodePort para Argo CD
+echo "🔌 Configurando acceso NodePort para Argo CD..."
+kubectl apply -f infra/manifests/services/argocd-nodeport.yaml
+
 echo "✅ Argo CD Bootstrapped!"
 echo "🔑 Initial Admin Password:"
 echo "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"

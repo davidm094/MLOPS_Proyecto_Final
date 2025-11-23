@@ -36,10 +36,11 @@ metadata:
   labels:
     app: frontend
 spec:
-  type: LoadBalancer
+  type: NodePort
   ports:
   - port: 8501
     targetPort: 8501
+    nodePort: 30501
     protocol: TCP
     name: http
   selector:

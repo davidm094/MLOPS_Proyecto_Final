@@ -54,11 +54,11 @@ Una vez completado el despliegue, los servicios están disponibles en:
 
 | Servicio | URL | Credenciales |
 |----------|-----|--------------|
-| **Argo CD** | https://localhost | admin / (ver output del script) |
-| **Airflow** | http://localhost:8080 | admin / admin |
-| **MLflow** | http://localhost:5000 | - |
-| **API (FastAPI)** | http://localhost:8000 | - |
-| **Frontend (Streamlit)** | http://localhost:8501 | - |
+| **Argo CD** | http://localhost:30080 | admin / (ver output del script) |
+| **Airflow** | http://localhost:30443 | admin / admin |
+| **MLflow** | http://localhost:30500 | - |
+| **API (FastAPI)** | http://localhost:30800 | - |
+| **Frontend (Streamlit)** | http://localhost:30501 | - |
 
 ### Obtener Password de Argo CD
 ```bash
