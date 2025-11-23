@@ -49,6 +49,8 @@ Este script:
 **Tiempo estimado:** 5-7 minutos
 
 > **Nota Airflow + Argo CD:** El chart oficial requiere deshabilitar los hooks de `createUserJob` y `migrateDatabaseJob` y marcar la migración con `argocd.argoproj.io/hook: Sync` para que las migraciones se ejecuten en cada sincronización. Esta configuración ya está aplicada en `infra/argocd/applications/core-apps.yaml` siguiendo la guía oficial.[^airflow-helm]
+>
+> Adicionalmente forzamos al subchart de PostgreSQL de Airflow a usar la imagen pública `library/postgres:13-alpine`, evitando los `ImagePullBackOff` que provoca la imagen de Bitnami en entornos restringidos.
 
 ## 🌐 Acceso a Servicios
 

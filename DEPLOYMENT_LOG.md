@@ -105,6 +105,11 @@
 - Se movió la responsabilidad del NodePort a un manifiesto independiente (`infra/manifests/services/airflow-webserver-nodeport.yaml`) aplicado automáticamente desde `scripts/start_mlops.sh`.
 - El chart vuelve a crear un Service `ClusterIP` estándar y el Service personalizado reexpone el Webserver en `30443`.
 
+#### Phase 8: Airflow PostgreSQL Image Override (2025-11-23 23:40 UTC)
+- El subchart `postgresql` de Airflow intentaba descargar `bitnami/postgresql`, lo que fallaba en la red del entorno (ImagePullBackOff) y dejaba los jobs de migración en CrashLoop.
+- Se forzó al subchart a usar `docker.io/library/postgres:13-alpine`, con credenciales/DB específicas para Airflow y persistencia deshabilitada.
+- Con esta imagen pública, el Postgres embebido del chart puede arrancar y los jobs `create-user`/`run-airflow-migrations` completan correctamente.
+
 - Completely rewrote `README.md`
   - Quick start guide
   - Architecture overview

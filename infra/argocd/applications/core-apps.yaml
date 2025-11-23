@@ -39,6 +39,20 @@ spec:
           applyCustomEnv: false
           jobAnnotations:
             "argocd.argoproj.io/hook": Sync
+        postgresql:
+          enabled: true
+          auth:
+            username: airflow
+            password: airflow-password
+            database: airflow
+            postgresPassword: airflow-postgres-root
+          image:
+            registry: docker.io
+            repository: library/postgres
+            tag: 13-alpine
+          primary:
+            persistence:
+              enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
