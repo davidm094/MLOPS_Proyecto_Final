@@ -85,10 +85,8 @@ spec:
           create: true
           name: mlflow
         extraEnvVars:
-          - name: MLFLOW_S3_ENDPOINT_URL
-            value: "http://seaweedfs-s3.mlops.svc:8333"
-          - name: AWS_DEFAULT_REGION
-            value: "us-east-1"
+          MLFLOW_S3_ENDPOINT_URL: "http://seaweedfs-s3.mlops.svc:8333"
+          AWS_DEFAULT_REGION: "us-east-1"
         service:
           type: NodePort
           port: 5000
