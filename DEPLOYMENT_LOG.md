@@ -42,6 +42,16 @@ Este documento registra cronológicamente el progreso, los desafíos encontrados
 - **Explicación:** Argo CD no borra automáticamente las aplicaciones ("Application" CRD) si solo se quitan del manifiesto padre, a menos que se configure un prune específico o se borre el objeto Application.
 - **Acción:** Se ejecutó `kubectl delete application minio -n argocd`, limpiando exitosamente el namespace `mlops`.
 
+### 6. Configuración de Red (MetalLB)
+- **Estado:** ✅ Completado (v0.12.1)
+- **Reto:** La versión moderna de MetalLB (v0.13.x) fallaba al arrancar en este entorno K3s específico.
+    - Errores: `Secret "webhook-server-cert" not found`, `Timeout waiting for Informer sync`.
+    - Causa: Problemas con el ValidatingWebhook y la generación de certificados internos debido probablemente a restricciones de red o configuración de K3s.
+- **Solución:** Se realizó un **Downgrade a MetalLB v0.12.1**.
+    - Esta versión utiliza configuración por ConfigMap en lugar de CRDs complejos y Webhooks.
+    - Se ajustó el manifiesto `install.yaml` en el repositorio para eliminar `PodSecurityPolicy` (ya no soportado en K3s nuevos) y asegurar la creación del namespace.
+- **Resultado:** El controlador arrancó correctamente y asignó la IP externa `10.43.100.95` al servicio de Argo CD.
+
 ---
 
 ## 🛠 Estado Actual del Clúster (Snapshot)
@@ -49,15 +59,14 @@ Este documento registra cronológicamente el progreso, los desafíos encontrados
 | Componente | Estado | Notas |
 | :--- | :--- | :--- |
 | **K3s** | 🟢 Running | CIDRs custom (`10.45.x.x`). |
-| **Argo CD** | 🟢 Running | Gestionando Apps vía GitOps. |
-| **SeaweedFS**| 🟢 Running | Reemplazo de MinIO. S3 Endpoint: `http://seaweedfs-s3.mlops.svc:8333`. |
+| **Argo CD** | 🟢 Running | UI accesible en `https://10.43.100.95`. |
+| **SeaweedFS**| 🟢 Running | S3 Endpoint: `http://seaweedfs-s3.mlops.svc:8333`. |
 | **Postgres** | 🟢 Running | Imagen oficial `13-alpine`. |
-| **MetalLB** | 🟡 Pendiente | Manifiestos cargados, verificando despliegue de controladores. |
-| **Airflow** | ⚪ Pendiente | Esperando sincronización de Argo. |
-| **MLflow** | ⚪ Pendiente | Esperando sincronización de Argo. |
+| **MetalLB** | 🟢 Running | Versión 0.12.1 (Stable Legacy). Asignando IPs. |
+| **Airflow** | ⏳ Syncing | En proceso de despliegue por Argo. |
+| **MLflow** | ⏳ Syncing | En proceso de despliegue por Argo. |
 
 ## 📋 Próximos Pasos Inmediatos
 1. Verificar despliegue de **Airflow** y **MLflow**.
-2. Confirmar que MetalLB asigne IPs externas.
+2. Obtener IPs externas para los servicios de ML.
 3. Ejecutar el pipeline de MLOps de prueba (DAG `mlops_full_pipeline`).
-
