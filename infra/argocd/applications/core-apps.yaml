@@ -1,0 +1,166 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
+    targetRevision: HEAD
+    path: infra/manifests/metallb
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: airflow
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: airflow
+    repoURL: https://airflow.apache.org
+    targetRevision: 1.10.0
+    helm:
+      valueFiles:
+        - values.yaml
+      values: |
+        executor: KubernetesExecutor
+        dags:
+          gitSync:
+            enabled: true
+            repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
+            branch: main
+            dir: apps/airflow/dags
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlflow
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: mlflow
+    repoURL: https://community-charts.github.io/helm-charts
+    targetRevision: 0.7.13
+    helm:
+      valueFiles:
+        - values.yaml
+      # We reference the values file from OUR repo, but chart from upstream
+      # This is tricky with Helm source. 
+      # Better approach: "App of Apps" usually points to a local directory with Chart.yaml dependencies
+      # OR we embed values. Since we want to point to our repo values...
+      # Let's use the pattern where we point to a local Directory that has the Chart dependency defined.
+      # BUT for simplicity now, let's embed the critical values here or use a pattern where we map the repo.
+      # Simplified: Embedding critical values for now to ensure it works directly.
+      values: |
+        backendStore:
+          postgres:
+            enabled: true
+            host: postgres-postgresql
+            port: 5432
+            database: mlflow
+            user: mlflow
+            password: mlflow-password
+        artifactRoot: s3://mlflow-artifacts
+        serviceAccount:
+          create: true
+          name: mlflow
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: minio
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: minio
+    repoURL: https://charts.bitnami.com/bitnami
+    targetRevision: 12.8.14
+    helm:
+      values: |
+        auth:
+          rootUser: admin
+          rootPassword: password123
+        defaultBuckets: "mlflow-artifacts,airflow-logs,data-raw,data-clean"
+        persistence:
+          enabled: true
+          size: 10Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: postgresql
+    repoURL: https://charts.bitnami.com/bitnami
+    targetRevision: 12.12.10
+    helm:
+      values: |
+        auth:
+          username: mlflow
+          password: mlflow-password
+          database: mlflow
+        primary:
+          persistence:
+            enabled: true
+            size: 8Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
