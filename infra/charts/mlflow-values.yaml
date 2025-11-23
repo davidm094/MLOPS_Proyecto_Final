@@ -14,10 +14,20 @@ serviceAccount:
   create: true
   name: mlflow
 
+# Configure S3 Connection to SeaweedFS
+extraEnvVars:
+  - name: MLFLOW_S3_ENDPOINT_URL
+    value: http://seaweedfs-s3.mlops.svc:8333
+  - name: AWS_ACCESS_KEY_ID
+    value: any  # SeaweedFS defaults allow anon or any if not configured secure
+  - name: AWS_SECRET_ACCESS_KEY
+    value: any
+  - name: AWS_DEFAULT_REGION
+    value: us-east-1
+
 ingress:
   enabled: true
   hosts:
     - host: mlflow.10.43.100.94.nip.io
       paths:
         - /
-

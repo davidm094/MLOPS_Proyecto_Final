@@ -43,6 +43,14 @@ spec:
             repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
             branch: main
             dir: apps/airflow/dags
+        # Update Airflow to use SeaweedFS S3
+        extraEnv:
+          - name: AIRFLOW_VAR_S3_ENDPOINT
+            value: http://seaweedfs-s3.mlops.svc:8333
+          - name: AWS_ACCESS_KEY_ID
+            value: any
+          - name: AWS_SECRET_ACCESS_KEY
+            value: any
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -69,13 +77,6 @@ spec:
     helm:
       valueFiles:
         - values.yaml
-      # We reference the values file from OUR repo, but chart from upstream
-      # This is tricky with Helm source. 
-      # Better approach: "App of Apps" usually points to a local directory with Chart.yaml dependencies
-      # OR we embed values. Since we want to point to our repo values...
-      # Let's use the pattern where we point to a local Directory that has the Chart dependency defined.
-      # BUT for simplicity now, let's embed the critical values here or use a pattern where we map the repo.
-      # Simplified: Embedding critical values for now to ensure it works directly.
       values: |
         backendStore:
           postgres:
@@ -89,6 +90,15 @@ spec:
         serviceAccount:
           create: true
           name: mlflow
+        extraEnvVars:
+          - name: MLFLOW_S3_ENDPOINT_URL
+            value: http://seaweedfs-s3.mlops.svc:8333
+          - name: AWS_ACCESS_KEY_ID
+            value: any
+          - name: AWS_SECRET_ACCESS_KEY
+            value: any
+          - name: AWS_DEFAULT_REGION
+            value: us-east-1
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -102,25 +112,45 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: minio
+  name: seaweedfs
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
-    chart: minio
-    repoURL: https://charts.bitnami.com/bitnami
-    targetRevision: 12.8.14
+    chart: seaweedfs
+    repoURL: https://seaweedfs.github.io/seaweedfs/helm
+    targetRevision: 3.59.0
     helm:
+      valueFiles:
+        - values.yaml
       values: |
-        auth:
-          rootUser: admin
-          rootPassword: password123
-        defaultBuckets: "mlflow-artifacts,airflow-logs,data-raw,data-clean"
-        persistence:
+        s3:
           enabled: true
+          port: 8333
+          replication:
+            enable: false
+        filer:
+          enabled: true
+          replicas: 1
+          storage:
+            enabled: true
+            size: 10Gi
+            storageClass: "longhorn-single"
+        volume:
+          enabled: true
+          replicas: 1
+          minFreeSpacePercent: 1
           size: 10Gi
+          storageClass: "longhorn-single"
+        master:
+          enabled: true
+          replicas: 1
+          storage:
+            enabled: true
+            size: 1Gi
+            storageClass: "longhorn-single"
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -130,6 +160,27 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: setup-buckets
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
+    targetRevision: HEAD
+    path: infra/manifests/setup
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -154,6 +205,9 @@ spec:
           persistence:
             enabled: true
             size: 8Gi
+        # Fix for Bitnami image pulling: Use explicit image tag if possible or check if it works.
+        # User had issues with Bitnami MinIO. Postgres might be fine or same issue.
+        # Let's force a tag if needed, but 12.12.10 chart uses a specific tag.
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -163,4 +217,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-

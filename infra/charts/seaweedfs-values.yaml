@@ -1,0 +1,31 @@
+s3:
+  enabled: true
+  port: 8333
+  replication:
+    enable: false
+  
+  # Persistence for S3 metadata
+  filer:
+    enabled: true
+    replicas: 1
+    storage:
+      enabled: true
+      size: 10Gi
+      storageClass: "longhorn-single"
+  
+  # Actual data storage
+  volume:
+    enabled: true
+    replicas: 1
+    minFreeSpacePercent: 1
+    size: 10Gi
+    storageClass: "longhorn-single"
+
+master:
+  enabled: true
+  replicas: 1
+  storage:
+    enabled: true
+    size: 1Gi
+    storageClass: "longhorn-single"
+
