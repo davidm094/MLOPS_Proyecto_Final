@@ -55,7 +55,7 @@ spec:
           web:
             ingressClassName: traefik
             hosts:
-              - name: airflow.10.43.100.94.nip.io
+              - name: airflow.mlops.local
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -108,7 +108,7 @@ spec:
           enabled: true
           className: traefik
           hosts:
-            - host: mlflow.10.43.100.94.nip.io
+            - host: mlflow.mlops.local
               paths:
                 - /
   destination:

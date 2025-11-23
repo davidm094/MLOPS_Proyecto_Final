@@ -11,7 +11,7 @@ metadata:
     traefik.ingress.kubernetes.io/service.passhostheader: "true"
 spec:
   rules:
-  - host: argocd.10.43.100.94.nip.io
+  - host: argocd.mlops.local
     http:
       paths:
       - path: /
