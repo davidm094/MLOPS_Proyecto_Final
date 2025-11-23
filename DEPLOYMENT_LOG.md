@@ -100,6 +100,11 @@
 - Cleaned Airflow `env` section to match chart expectations (array of name/value pairs)
 - Result: Argo CD can now render both charts without schema errors and complete the sync
 
+#### Phase 7: NodePort Exposure Strategy (2025-11-23 23:25 UTC)
+- Chart v1.10.0 no permite fijar `nodePort` dentro de `webserver.service`, lo que impedía el render de Argo CD.
+- Se movió la responsabilidad del NodePort a un manifiesto independiente (`infra/manifests/services/airflow-webserver-nodeport.yaml`) aplicado automáticamente desde `scripts/start_mlops.sh`.
+- El chart vuelve a crear un Service `ClusterIP` estándar y el Service personalizado reexpone el Webserver en `30443`.
+
 - Completely rewrote `README.md`
   - Quick start guide
   - Architecture overview

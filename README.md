@@ -62,6 +62,8 @@ Una vez completado el despliegue, los servicios están disponibles en:
 | **API (FastAPI)** | http://localhost:30800 | - |
 | **Frontend (Streamlit)** | http://localhost:30501 | - |
 
+> Airflow expone su UI mediante un `Service` tipo NodePort (`infra/manifests/services/airflow-webserver-nodeport.yaml`), aplicado automáticamente por `start_mlops.sh`.
+
 ### Obtener Password de Argo CD
 ```bash
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d && echo

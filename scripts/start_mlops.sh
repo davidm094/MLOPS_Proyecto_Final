@@ -40,6 +40,8 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📦 PASO 3/5: Desplegando Aplicaciones MLOps"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 kubectl apply -f infra/argocd/applications/core-apps.yaml
+# Servicios NodePort adicionales (Airflow webserver)
+kubectl apply -f infra/manifests/services/airflow-webserver-nodeport.yaml
 echo "✅ Aplicaciones registradas en Argo CD"
 echo ""
 

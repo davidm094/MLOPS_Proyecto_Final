@@ -39,10 +39,6 @@ spec:
           applyCustomEnv: false
           jobAnnotations:
             "argocd.argoproj.io/hook": Sync
-        webserver:
-          service:
-            type: NodePort
-            nodePort: 30443
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
