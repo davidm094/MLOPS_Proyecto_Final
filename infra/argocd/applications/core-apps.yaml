@@ -42,7 +42,6 @@ spec:
         webserver:
           service:
             type: NodePort
-            port: 8080
             nodePort: 30443
   destination:
     server: https://kubernetes.default.svc
