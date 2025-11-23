@@ -17,6 +17,8 @@ spec:
           type: ClusterIP
         deployment:
           kind: DaemonSet
+        rollingUpdate:
+          maxUnavailable: "100%"
         ports:
           web:
             hostPort: 80
