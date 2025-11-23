@@ -1,23 +1,4 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: traefik
-  namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
-    targetRevision: HEAD
-    path: infra/manifests/traefik
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: kube-system
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+# Traefik is provided by K3d by default, no need to deploy custom one
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -42,7 +23,7 @@ spec:
             enabled: true
             repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
             branch: main
-            dir: apps/airflow/dags
+            subPath: apps/airflow/dags
         extraEnv:
           - name: AIRFLOW_VAR_S3_ENDPOINT
             value: http://seaweedfs-s3.mlops.svc:8333
@@ -50,12 +31,10 @@ spec:
             value: any
           - name: AWS_SECRET_ACCESS_KEY
             value: any
-        ingress:
-          enabled: true
-          web:
-            ingressClassName: traefik
-            hosts:
-              - name: airflow.mlops.local
+        webserver:
+          service:
+            type: LoadBalancer
+            port: 8080
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -104,13 +83,9 @@ spec:
             value: any
           - name: AWS_DEFAULT_REGION
             value: us-east-1
-        ingress:
-          enabled: true
-          className: traefik
-          hosts:
-            - host: mlflow.mlops.local
-              paths:
-                - /
+        service:
+          type: LoadBalancer
+          port: 5000
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -149,20 +124,20 @@ spec:
           storage:
             enabled: true
             size: 10Gi
-            storageClass: "longhorn-single"
+            storageClass: "local-path"
         volume:
           enabled: true
           replicas: 1
           minFreeSpacePercent: 1
           size: 10Gi
-          storageClass: "longhorn-single"
+          storageClass: "local-path"
         master:
           enabled: true
           replicas: 1
           storage:
             enabled: true
             size: 1Gi
-            storageClass: "longhorn-single"
+            storageClass: "local-path"
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -217,11 +192,57 @@ spec:
           persistence:
             enabled: true
             size: 8Gi
-          storageClass: "longhorn-single"
+            storageClass: "local-path"
         image:
           registry: docker.io
           repository: library/postgres
           tag: 13-alpine
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: api
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
+    targetRevision: HEAD
+    path: apps/api/k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
+    targetRevision: HEAD
+    path: apps/frontend/k8s
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops

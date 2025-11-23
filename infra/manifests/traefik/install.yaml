@@ -100,9 +100,6 @@ spec:
             - --entrypoints.websecure.address=:443
             - --providers.kubernetesingress
             - --providers.kubernetescrd
-            - --api.dashboard=true
-            - --api.insecure=true
-            - --entrypoints.traefik.address=:9000
           ports:
             - name: web
               containerPort: 80
@@ -111,8 +108,7 @@ spec:
               containerPort: 443
               hostPort: 443
             - name: admin
-              containerPort: 9000
-              hostPort: 9000
+              containerPort: 8080
           securityContext:
             capabilities:
               drop:

@@ -1,72 +1,139 @@
-# Bitácora de Despliegue - Proyecto Final MLOps
+# Deployment Log - MLOps Platform
 
-Este documento registra cronológicamente el progreso, los desafíos encontrados, las soluciones aplicadas (fixes) y las decisiones de arquitectura tomadas durante el despliegue de la plataforma en el entorno Bare Metal (Rocky Linux 9).
+## Session: 2025-11-23
 
-## 📅 Hitos del Despliegue
+### Initial Setup (VM Rocky Linux)
+**Timestamp:** 13:10 PM
 
-### 1. Inicialización y Estructura del Proyecto
-- **Estado:** ✅ Completado
-- **Acción:** Se diseñó una estructura de Monorepo para soportar GitOps.
-- **Detalle:**
-    - `apps/`: Código fuente (Airflow, API, Frontend).
-    - `infra/`: Manifiestos Kubernetes y Helm Charts.
-    - `scripts/`: Automatización de host y bootstrap.
+#### Actions Taken:
+1. Executed `setup_host.sh` on Rocky Linux VM (10.43.100.94)
+   - Disabled firewalld
+   - Set SELinux to permissive
+   - Installed iSCSI and NFS utilities
+   - Installed K3s v1.33.5+k3s1 with custom CIDRs:
+     - Pod CIDR: 10.44.0.0/16
+     - Service CIDR: 10.45.0.0/16
+     - DNS IP: 10.45.0.10
+   - Disabled servicelb and traefik
 
-### 2. Preparación del Host (VM Rocky Linux)
-- **Estado:** ✅ Completado
-- **Reto:** Conflicto de direcciones IP. La VM tiene la IP `10.43.100.94`, que entra en conflicto con el CIDR por defecto de K3s (`10.43.0.0/16`).
-- **Solución:** Se implementó `scripts/setup_host.sh` instalando K3s con CIDRs personalizados:
-    - Pod CIDR: `10.44.0.0/16`
-    - Service CIDR: `10.45.0.0/16`
-    - DNS IP: `10.45.0.10`
-- **Fix Adicional:** Se instaló `iscsi-initiator-utils` y se deshabilitó `firewalld` para permitir el funcionamiento de Longhorn y la comunicación entre pods.
+2. Attempted Argo CD bootstrap
+   - **Issue:** Network connectivity blocked access to `raw.githubusercontent.com`
+   - **Solution:** Downloaded `install.yaml` locally to `infra/argocd/install/install.yaml`
 
-### 3. Bootstrap de Argo CD
-- **Estado:** ✅ Completado
-- **Reto:** La VM tiene restricciones de red que bloquean el acceso directo a `raw.githubusercontent.com`, impidiendo la instalación remota de Argo CD.
-- **Solución:** Se descargó el manifiesto `install.yaml` oficial, se agregó al repositorio (`infra/argocd/install/install.yaml`) y se modificó el script de bootstrap para aplicar el archivo localmente.
-- **Resultado:** Argo CD desplegado y accesible.
+#### Challenges Encountered:
+- **Image Pull Failures:** MinIO and PostgreSQL images failed to pull
+  - MinIO: Changed Docker Hub policy
+  - **Solution:** Replaced MinIO with SeaweedFS (S3-compatible alternative)
+  - PostgreSQL: Forced use of `postgres:13-alpine` image
 
-### 4. Capa de Datos (Storage & DB)
-- **Estado:** ✅ Completado (SeaweedFS & Postgres)
-- **Reto 1 (MinIO):** Las imágenes de Bitnami MinIO (`bitnami/minio`) fallaban al descargarse (`ErrImagePull`) debido a bloqueos de red o rate limiting hacia Docker Hub/Quay desde la VM.
-- **Solución 1:** Se reemplazó MinIO por **SeaweedFS**.
-    - SeaweedFS usa imágenes que sí pudieron descargarse.
-    - Se configuró como Gateway S3 (`s3.enabled: true`) en el puerto 8333.
-    - Se creó un Job (`setup-buckets-job`) para crear automáticamente los buckets (`mlflow-artifacts`, `airflow-logs`, etc.) post-despliegue.
-- **Reto 2 (Postgres):** La imagen de Bitnami Postgres también falló (`ImagePullBackOff`).
-- **Solución 2:** Se modificó la definición de la App `postgres` en Argo CD para usar la imagen oficial `postgres:13-alpine` de Docker Hub, la cual se confirmó que funciona (igual que `alpine`).
+- **MetalLB Issues:**
+  - v0.13.x: Missing `memberlist` secret, webhook certificate errors
+  - **Solution:** Downgraded to v0.12.1 (ConfigMap-based)
+  - Removed deprecated `PodSecurityPolicy` definitions
+  - Added `metallb-system` namespace to manifest
 
-### 5. Limpieza de Recursos Huérfanos
-- **Situación:** El pod de MinIO quedaba en estado `ImagePullBackOff` a pesar de haber eliminado su configuración del repositorio.
-- **Explicación:** Argo CD no borra automáticamente las aplicaciones ("Application" CRD) si solo se quitan del manifiesto padre, a menos que se configure un prune específico o se borre el objeto Application.
-- **Acción:** Se ejecutó `kubectl delete application minio -n argocd`, limpiando exitosamente el namespace `mlops`.
+- **NodePort Access Issues:**
+  - Argo CD service patched to NodePort (30443)
+  - Port not accessible externally despite firewalld being stopped
+  - `ss -tulpn` showed no listener on NodePort
+  - **Root Cause:** kube-proxy not binding NodePort to external interface
 
-### 6. Configuración de Red (MetalLB)
-- **Estado:** ✅ Completado (v0.12.1)
-- **Reto:** La versión moderna de MetalLB (v0.13.x) fallaba al arrancar en este entorno K3s específico.
-    - Errores: `Secret "webhook-server-cert" not found`, `Timeout waiting for Informer sync`.
-    - Causa: Problemas con el ValidatingWebhook y la generación de certificados internos debido probablemente a restricciones de red o configuración de K3s.
-- **Solución:** Se realizó un **Downgrade a MetalLB v0.12.1**.
-    - Esta versión utiliza configuración por ConfigMap en lugar de CRDs complejos y Webhooks.
-    - Se ajustó el manifiesto `install.yaml` en el repositorio para eliminar `PodSecurityPolicy` (ya no soportado en K3s nuevos) y asegurar la creación del namespace.
-- **Resultado:** El controlador arrancó correctamente y asignó la IP externa `10.43.100.95` al servicio de Argo CD.
+### Migration to WSL (Local Development)
+**Timestamp:** 20:30 PM
 
----
+#### Decision Rationale:
+- VM network restrictions too limiting (no control over firewall/routing)
+- Local deployment provides full control
+- Faster iteration and debugging
 
-## 🛠 Estado Actual del Clúster (Snapshot)
+#### Architecture Changes:
+1. **Cluster:** K3d (K3s in Docker) instead of bare-metal K3s
+2. **Networking:** LoadBalancer services (mapped by K3d to localhost) instead of MetalLB
+3. **Ingress:** Removed custom Traefik, using K3d's built-in Traefik
+4. **DNS:** Eliminated need for nip.io or custom DNS
 
-| Componente | Estado | Notas |
-| :--- | :--- | :--- |
-| **K3s** | 🟢 Running | CIDRs custom (`10.45.x.x`). |
-| **Argo CD** | 🟢 Running | UI accesible en `https://10.43.100.95`. |
-| **SeaweedFS**| 🟢 Running | S3 Endpoint: `http://seaweedfs-s3.mlops.svc:8333`. |
-| **Postgres** | 🟢 Running | Imagen oficial `13-alpine`. |
-| **MetalLB** | 🟢 Running | Versión 0.12.1 (Stable Legacy). Asignando IPs. |
-| **Airflow** | ⏳ Syncing | En proceso de despliegue por Argo. |
-| **MLflow** | ⏳ Syncing | En proceso de despliegue por Argo. |
+#### Implementation Steps:
 
-## 📋 Próximos Pasos Inmediatos
-1. Verificar despliegue de **Airflow** y **MLflow**.
-2. Obtener IPs externas para los servicios de ML.
-3. Ejecutar el pipeline de MLOps de prueba (DAG `mlops_full_pipeline`).
+##### Phase 1: Cluster Recreation
+- Created `scripts/create_cluster.sh`
+- K3d configuration:
+  - Ports mapped: 80, 443, 8080 (Airflow), 5000 (MLflow), 8501 (Streamlit)
+  - 1 server + 1 agent node
+  - Traefik enabled (K3d default)
+
+##### Phase 2: Service Exposure
+- Changed all services from ClusterIP to LoadBalancer
+- K3d automatically maps LoadBalancer IPs to localhost ports
+- Eliminated Ingress complexity for local development
+
+##### Phase 3: Complete Application Definitions
+- Created `apps/api/k8s/deployment.yaml`
+  - FastAPI service with health checks
+  - LoadBalancer on port 8000
+  - Environment variables for MLflow and S3
+
+- Created `apps/frontend/k8s/deployment.yaml`
+  - Streamlit service
+  - LoadBalancer on port 8501
+  - Environment variables for API and MLflow URLs
+
+- Updated `infra/argocd/applications/core-apps.yaml`
+  - Removed custom Traefik app
+  - Added `api` and `frontend` Argo CD applications
+  - Changed storageClass from "longhorn-single" to "local-path" (K3d default)
+
+##### Phase 4: Unified Deployment Script
+- Created `scripts/start_mlops.sh`
+  - Single command deployment
+  - Automated cluster creation
+  - Argo CD bootstrap
+  - Application deployment
+  - Health checks and wait conditions
+  - Display of access URLs and credentials
+
+##### Phase 5: Documentation
+- Completely rewrote `README.md`
+  - Quick start guide
+  - Architecture overview
+  - Service access URLs
+  - Troubleshooting section
+  - CI/CD pipeline documentation
+  - ML pipeline explanation
+
+### Current Status
+**All components ready for deployment:**
+
+✅ Cluster creation script (`create_cluster.sh`)
+✅ Unified deployment script (`start_mlops.sh`)
+✅ Kubernetes manifests for API and Frontend
+✅ Updated Argo CD applications (all 8 apps defined)
+✅ Comprehensive documentation
+✅ LoadBalancer-based networking (no Ingress complexity)
+
+### Access URLs (Post-Deployment)
+- Argo CD: https://localhost
+- Airflow: http://localhost:8080
+- MLflow: http://localhost:5000
+- API: http://localhost:8000
+- Frontend: http://localhost:8501
+
+### Lessons Learned
+1. **Network Restrictions:** Corporate/university networks can severely limit bare-metal K8s deployments
+2. **MetalLB Complexity:** For single-node clusters, LoadBalancer via K3d is simpler than MetalLB
+3. **Image Availability:** Always verify image accessibility before deployment (MinIO Docker Hub changes)
+4. **Local Development:** K3d provides excellent local K8s experience with minimal overhead
+5. **GitOps Challenges:** Argo CD sync requires proper repo access and can cache aggressively
+
+### Next Steps (User Actions Required)
+1. Execute `./scripts/start_mlops.sh` in WSL
+2. Verify all services are accessible
+3. Test ML pipeline end-to-end
+4. Validate SHAP explanations in Frontend
+
+### Technical Debt / Future Improvements
+- [ ] Add proper TLS certificates (currently using Traefik default)
+- [ ] Implement proper secrets management (currently hardcoded)
+- [ ] Add resource limits/requests to all deployments
+- [ ] Implement proper backup strategy for Postgres and SeaweedFS
+- [ ] Add Prometheus/Grafana for observability
+- [ ] Implement proper authentication for Airflow/MLflow
