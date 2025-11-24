@@ -52,6 +52,8 @@ spec:
             value: "any"
           - name: AWS_SECRET_ACCESS_KEY
             value: "any"
+          - name: AIRFLOW__KUBERNETES__DELETE_WORKER_PODS
+            value: "False"
         createUserJob:
           useHelmHooks: false
           applyCustomEnv: false
