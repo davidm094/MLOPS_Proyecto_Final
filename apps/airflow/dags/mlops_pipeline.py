@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import logging
 import os
 import pandas as pd
-from src.data_loader import fetch_data, save_raw_data
+from src.data_loader import fetch_data, save_raw_data, load_raw_data
 from src.preprocessing import clean_data
 from src.drift_detection import detect_drift
 from src.model_training import train_and_log_model
@@ -21,8 +21,9 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-DATA_PATH = "/tmp/data" # In production this should be shared volume or S3
-os.makedirs(DATA_PATH, exist_ok=True)
+# S3 keys
+CURRENT_BATCH_KEY = "current_batch.csv"
+REFERENCE_KEY = "reference.csv"
 
 def ingest_data(**kwargs):
     # Fetch data
@@ -38,26 +39,28 @@ def ingest_data(**kwargs):
     logging.info(f"Starting ingestion for Group: {group_number}, Day: {day}")
     df = fetch_data(group_number=group_number, day=day)
     
-    # Save current batch
-    current_path = f"{DATA_PATH}/current_batch.csv"
-    save_raw_data(df, current_path)
-    return current_path
+    # Save current batch to S3
+    s3_path = save_raw_data(df, CURRENT_BATCH_KEY)
+    logging.info(f"Data saved to {s3_path}")
+    return CURRENT_BATCH_KEY
 
 def check_drift(**kwargs):
     ti = kwargs['ti']
-    current_path = ti.xcom_pull(task_ids='ingest_data')
-    current_df = pd.read_csv(current_path)
+    current_key = ti.xcom_pull(task_ids='ingest_data')
+    logging.info(f"Loading current data from {current_key}")
+    current_df = load_raw_data(current_key)
     
+    if current_df is None:
+        raise ValueError("Could not load current data from S3")
+
     # Load reference data (previous batch or baseline)
-    reference_path = f"{DATA_PATH}/reference.csv"
+    reference_df = load_raw_data(REFERENCE_KEY)
     
-    if not os.path.exists(reference_path):
-        logging.info("No reference data found. Treating as initial run.")
+    if reference_df is None:
+        logging.info("No reference data found in S3. Treating as initial run.")
         # Save this as reference for next time
-        save_raw_data(current_df, reference_path)
+        save_raw_data(current_df, REFERENCE_KEY)
         return 'train_model'
-        
-    reference_df = pd.read_csv(reference_path)
     
     # Clean both for drift detection (to handle types)
     current_clean = clean_data(current_df)
@@ -75,18 +78,23 @@ def check_drift(**kwargs):
 
 def train_process(**kwargs):
     ti = kwargs['ti']
-    current_path = ti.xcom_pull(task_ids='ingest_data')
-    df = pd.read_csv(current_path)
+    current_key = ti.xcom_pull(task_ids='ingest_data')
+    logging.info(f"Loading current data from {current_key}")
+    df = load_raw_data(current_key)
+    
+    if df is None:
+        raise ValueError("Could not load training data from S3")
     
     # Clean
     df_clean = clean_data(df)
     
     # Train
-    mlflow.set_tracking_uri("http://mlflow-service:5000") # Service name in K8s
+    # Use the correct MLflow service DNS
+    mlflow.set_tracking_uri("http://mlflow:5000") 
     run_id, rmse = train_and_log_model(df_clean)
     
-    # Update reference data since we retrained
-    save_raw_data(df, f"{DATA_PATH}/reference.csv")
+    # Update reference data since we retrained (establish new baseline)
+    save_raw_data(df, REFERENCE_KEY)
     
     return run_id
 
@@ -102,9 +110,9 @@ with DAG(
     ingest = PythonOperator(
         task_id='ingest_data',
         python_callable=ingest_data,
-        op_kwargs={'dag_run': '{{ dag_run }}'}, # Pass dag_run context properly if needed, but provide_context=True handles it
+        op_kwargs={'dag_run': '{{ dag_run }}'}, 
         provide_context=True,
-        templates_dict={'group_number': '5', 'day': 'Tuesday'} # Pass group 5 explicitly
+        templates_dict={'group_number': '5', 'day': 'Tuesday'} 
     )
 
     drift_check = BranchPythonOperator(
@@ -124,4 +132,3 @@ with DAG(
     start >> ingest >> drift_check
     drift_check >> train >> end
     drift_check >> end
-

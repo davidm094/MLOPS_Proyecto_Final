@@ -2,8 +2,35 @@ import requests
 import pandas as pd
 import logging
 import time
+import boto3
+import os
+from io import StringIO
 
 DATA_SOURCE_URL = "http://10.43.100.103:8000"
+
+# S3 Configuration
+S3_ENDPOINT = os.getenv('AIRFLOW_VAR_S3_ENDPOINT', 'http://seaweedfs-s3.mlops.svc:8333')
+AWS_ACCESS_KEY = os.getenv('AWS_ACCESS_KEY_ID', 'any')
+AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', 'any')
+BUCKET_NAME = 'data-raw'
+
+def get_s3_client():
+    return boto3.client(
+        's3',
+        endpoint_url=S3_ENDPOINT,
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_SECRET_KEY
+    )
+
+def ensure_bucket_exists(s3, bucket_name):
+    try:
+        s3.head_bucket(Bucket=bucket_name)
+    except:
+        try:
+            s3.create_bucket(Bucket=bucket_name)
+            logging.info(f"Created bucket {bucket_name}")
+        except Exception as e:
+            logging.warning(f"Could not create bucket {bucket_name}: {e}")
 
 def fetch_data(group_number="5", day="Tuesday"):
     """
@@ -16,7 +43,7 @@ def fetch_data(group_number="5", day="Tuesday"):
             "day": day
         }
         logging.info(f"Requesting data from URL: {url} with params: {params}")
-        response = requests.get(url, params=params, timeout=30) # Added timeout
+        response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
         df = pd.DataFrame(data)
@@ -36,7 +63,37 @@ def fetch_data(group_number="5", day="Tuesday"):
         time.sleep(600)
         raise
 
-def save_raw_data(df, path):
-    df.to_csv(path, index=False)
-    logging.info(f"Raw data saved to {path}")
+def save_raw_data(df, filename):
+    """
+    Saves DataFrame to S3. Filename should be the object key (e.g. 'current_batch.csv')
+    """
+    try:
+        s3 = get_s3_client()
+        ensure_bucket_exists(s3, BUCKET_NAME)
+        
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        
+        s3.put_object(Body=csv_buffer.getvalue(), Bucket=BUCKET_NAME, Key=filename)
+        logging.info(f"Saved {filename} to S3 bucket {BUCKET_NAME}")
+        return f"s3://{BUCKET_NAME}/{filename}"
+    except Exception as e:
+        logging.error(f"Failed to save to S3: {e}")
+        raise
 
+def load_raw_data(filename):
+    """
+    Loads DataFrame from S3.
+    """
+    try:
+        s3 = get_s3_client()
+        logging.info(f"Loading {filename} from S3 bucket {BUCKET_NAME}")
+        obj = s3.get_object(Bucket=BUCKET_NAME, Key=filename)
+        df = pd.read_csv(obj['Body'])
+        return df
+    except Exception as e:
+        logging.error(f"Failed to load from S3: {e}")
+        # Return empty dataframe or raise depending on logic
+        if "NoSuchKey" in str(e):
+             return None
+        raise
