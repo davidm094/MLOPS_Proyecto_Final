@@ -24,13 +24,21 @@ spec:
             repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
             branch: main
             subPath: apps/airflow/dags
-        defaultAirflowRepository: davidm094/mlops-airflow
-        defaultAirflowTag: v1
+        # Support for older charts
+        airflow:
+          image:
+            repository: davidm094/mlops-airflow
+            tag: v1
+            pullPolicy: Always
+        # Support for newer charts
         images:
           airflow:
             repository: davidm094/mlops-airflow
             tag: v1
             pullPolicy: Always
+        # Support for bitnami-style charts
+        defaultAirflowRepository: davidm094/mlops-airflow
+        defaultAirflowTag: v1
         env:
           - name: AIRFLOW_VAR_S3_ENDPOINT
             value: "http://seaweedfs-s3.mlops.svc:8333"
