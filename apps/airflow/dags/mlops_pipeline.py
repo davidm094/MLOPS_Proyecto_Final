@@ -26,7 +26,12 @@ os.makedirs(DATA_PATH, exist_ok=True)
 
 def ingest_data(**kwargs):
     # Fetch data
-    group_id = kwargs.get('dag_run').conf.get('group_id', '1')
+    # Try to get group_id from templates_dict, then dag_run conf, then default to '5'
+    group_id = kwargs.get('templates_dict', {}).get('group_id')
+    if not group_id:
+        group_id = kwargs.get('dag_run').conf.get('group_id', '5')
+    
+    logging.info(f"Starting ingestion for Group ID: {group_id}")
     df = fetch_data(group_id)
     
     # Save current batch
@@ -93,7 +98,9 @@ with DAG(
     ingest = PythonOperator(
         task_id='ingest_data',
         python_callable=ingest_data,
-        provide_context=True
+        op_kwargs={'dag_run': '{{ dag_run }}'}, # Pass dag_run context properly if needed, but provide_context=True handles it
+        provide_context=True,
+        templates_dict={'group_id': '5'} # Pass group 5 explicitly
     )
 
     drift_check = BranchPythonOperator(
