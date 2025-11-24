@@ -26,13 +26,17 @@ os.makedirs(DATA_PATH, exist_ok=True)
 
 def ingest_data(**kwargs):
     # Fetch data
-    # Try to get group_id from templates_dict, then dag_run conf, then default to '5'
-    group_id = kwargs.get('templates_dict', {}).get('group_id')
-    if not group_id:
-        group_id = kwargs.get('dag_run').conf.get('group_id', '5')
+    # Try to get params from templates_dict, then dag_run conf, then default
+    group_number = kwargs.get('templates_dict', {}).get('group_number')
+    day = kwargs.get('templates_dict', {}).get('day')
     
-    logging.info(f"Starting ingestion for Group ID: {group_id}")
-    df = fetch_data(group_id)
+    if not group_number:
+        group_number = kwargs.get('dag_run').conf.get('group_number', '5')
+    if not day:
+        day = kwargs.get('dag_run').conf.get('day', 'Tuesday')
+    
+    logging.info(f"Starting ingestion for Group: {group_number}, Day: {day}")
+    df = fetch_data(group_number=group_number, day=day)
     
     # Save current batch
     current_path = f"{DATA_PATH}/current_batch.csv"
@@ -100,7 +104,7 @@ with DAG(
         python_callable=ingest_data,
         op_kwargs={'dag_run': '{{ dag_run }}'}, # Pass dag_run context properly if needed, but provide_context=True handles it
         provide_context=True,
-        templates_dict={'group_id': '5'} # Pass group 5 explicitly
+        templates_dict={'group_number': '5', 'day': 'Tuesday'} # Pass group 5 explicitly
     )
 
     drift_check = BranchPythonOperator(

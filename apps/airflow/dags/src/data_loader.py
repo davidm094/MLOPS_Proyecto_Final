@@ -5,14 +5,18 @@ import time
 
 DATA_SOURCE_URL = "http://10.43.100.103:8000"
 
-def fetch_data(group_id="5"):
+def fetch_data(group_number="5", day="Tuesday"):
     """
-    Fetches data from the external API.
+    Fetches data from the external API using query parameters.
     """
     try:
-        url = f"{DATA_SOURCE_URL}/data/{group_id}"
-        logging.info(f"Requesting data from URL: {url}")
-        response = requests.get(url, timeout=30) # Added timeout
+        url = f"{DATA_SOURCE_URL}/data"
+        params = {
+            "group_number": group_number,
+            "day": day
+        }
+        logging.info(f"Requesting data from URL: {url} with params: {params}")
+        response = requests.get(url, params=params, timeout=30) # Added timeout
         response.raise_for_status()
         data = response.json()
         df = pd.DataFrame(data)
