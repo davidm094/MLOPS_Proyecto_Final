@@ -25,11 +25,11 @@ spec:
             branch: main
             subPath: apps/airflow/dags
         defaultAirflowRepository: davidm094/mlops-airflow
-        defaultAirflowTag: latest
+        defaultAirflowTag: v1
         images:
           airflow:
             repository: davidm094/mlops-airflow
-            tag: latest
+            tag: v1
             pullPolicy: Always
         env:
           - name: AIRFLOW_VAR_S3_ENDPOINT
