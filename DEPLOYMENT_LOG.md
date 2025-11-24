@@ -92,6 +92,14 @@
   - Display of access URLs and credentials
 
 ##### Phase 5: Documentation
+- Completely rewrote `README.md`
+  - Quick start guide
+  - Architecture overview
+  - Service access URLs
+  - Troubleshooting section
+  - CI/CD pipeline documentation
+  - ML pipeline explanation
+
 #### Phase 6: Helm Compatibility Fixes (2025-11-23 22:30 UTC)
 - Applied upstream requirements for Airflow Helm chart when using Argo CD:
   - Disabled Helm hooks for `createUserJob` and `migrateDatabaseJob`
@@ -110,16 +118,14 @@
 - Se forzó al subchart a usar `docker.io/library/postgres:13-alpine`, con credenciales/DB específicas para Airflow y persistencia deshabilitada.
 - Con esta imagen pública, el Postgres embebido del chart puede arrancar y los jobs `create-user`/`run-airflow-migrations` completan correctamente.
 
-- Completely rewrote `README.md`
-  - Quick start guide
-  - Architecture overview
-  - Service access URLs
-  - Troubleshooting section
-  - CI/CD pipeline documentation
-  - ML pipeline explanation
+#### Phase 9: Service Selector Fixes (2025-11-23 23:55 UTC)
+- El servicio NodePort de Airflow (`airflow-webserver-nodeport`) no encontraba endpoints.
+- Causa: Selectors incorrectos (`app.kubernetes.io/name`) vs Labels reales del chart legacy (`component=webserver`, `release=airflow`).
+- Solución: Se corrigió el manifiesto del servicio para usar los labels correctos.
+- **Resultado Final:** Acceso exitoso a Airflow UI en `http://localhost:30443`.
 
 ### Current Status
-**All components ready for deployment:**
+**All components ready and accessible:**
 
 ✅ Cluster creation script (`create_cluster.sh`)
 ✅ Unified deployment script (`start_mlops.sh`)
@@ -129,11 +135,11 @@
 ✅ LoadBalancer-based networking (no Ingress complexity)
 
 ### Access URLs (Post-Deployment)
-- Argo CD: https://localhost
-- Airflow: http://localhost:8080
-- MLflow: http://localhost:5000
-- API: http://localhost:8000
-- Frontend: http://localhost:8501
+- Argo CD: http://localhost:30080 (admin / password del secret)
+- Airflow: http://localhost:30443 (admin / admin)
+- MLflow: http://localhost:30500
+- API: http://localhost:30800
+- Frontend: http://localhost:30501
 
 ### Lessons Learned
 1. **Network Restrictions:** Corporate/university networks can severely limit bare-metal K8s deployments
@@ -141,12 +147,11 @@
 3. **Image Availability:** Always verify image accessibility before deployment (MinIO Docker Hub changes)
 4. **Local Development:** K3d provides excellent local K8s experience with minimal overhead
 5. **GitOps Challenges:** Argo CD sync requires proper repo access and can cache aggressively
+6. **Helm Legacy:** Older charts (Airflow 1.10) use non-standard labels and service definitions, requiring manual overrides.
 
 ### Next Steps (User Actions Required)
-1. Execute `./scripts/start_mlops.sh` in WSL
-2. Verify all services are accessible
-3. Test ML pipeline end-to-end
-4. Validate SHAP explanations in Frontend
+1. Verify ML pipeline execution end-to-end
+2. Validate SHAP explanations in Frontend
 
 ### Technical Debt / Future Improvements
 - [ ] Add proper TLS certificates (currently using Traefik default)
