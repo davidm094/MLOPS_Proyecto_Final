@@ -40,19 +40,14 @@ spec:
           jobAnnotations:
             "argocd.argoproj.io/hook": Sync
         postgresql:
-          enabled: true
-          auth:
-            username: airflow
-            password: airflow-password
-            database: airflow
-            postgresPassword: airflow-postgres-root
-          image:
-            registry: docker.io
-            repository: library/postgres
-            tag: 13-alpine
-          primary:
-            persistence:
-              enabled: false
+          enabled: false
+        data:
+          metadataConnection:
+            user: airflow
+            pass: airflow
+            host: postgres-postgresql.mlops.svc.cluster.local
+            port: 5432
+            db: airflow
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
@@ -204,14 +199,19 @@ spec:
     helm:
       values: |
         auth:
-          username: mlflow
-          password: mlflow-password
+          username: postgres
+          password: airflow-postgres-root
           database: mlflow
         primary:
           persistence:
             enabled: true
             size: 8Gi
-            storageClass: "local-path"
+          storageClass: "local-path"
+        initdbScripts:
+          init.sql: |
+            CREATE USER mlflow WITH PASSWORD 'mlflow-password';
+            CREATE DATABASE mlflow OWNER mlflow;
+            GRANT ALL PRIVILEGES ON DATABASE mlflow TO mlflow;
         image:
           registry: docker.io
           repository: library/postgres

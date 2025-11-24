@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-airflow-db
+  namespace: mlops
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  template:
+    spec:
+      containers:
+      - name: init-db
+        image: postgres:13-alpine
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            export PGPASSWORD=$POSTGRES_PASSWORD
+            psql -h postgres-postgresql -U postgres -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname='airflow'" | grep -q 1 || psql -h postgres-postgresql -U postgres -d postgres -c "CREATE USER airflow WITH PASSWORD 'airflow';"
+            psql -h postgres-postgresql -U postgres -d postgres -c "SELECT 1 FROM pg_database WHERE datname='airflow'" | grep -q 1 || psql -h postgres-postgresql -U postgres -d postgres -c "CREATE DATABASE airflow OWNER airflow;"
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "airflow-postgres-root" # Password del superusuario postgres definido en el chart
+      restartPolicy: Never
+
