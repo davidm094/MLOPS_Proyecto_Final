@@ -54,6 +54,15 @@ spec:
             value: "any"
           - name: AIRFLOW__KUBERNETES__DELETE_WORKER_PODS
             value: "False"
+          # Remote Logging Configuration
+          - name: AIRFLOW__LOGGING__REMOTE_LOGGING
+            value: "True"
+          - name: AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER
+            value: "s3://airflow-logs"
+          - name: AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID
+            value: "my_s3_conn"
+          - name: AIRFLOW_CONN_MY_S3_CONN
+            value: "aws://any:any@?endpoint_url=http%3A%2F%2Fseaweedfs-s3.mlops.svc%3A8333"
         createUserJob:
           useHelmHooks: false
           applyCustomEnv: false
