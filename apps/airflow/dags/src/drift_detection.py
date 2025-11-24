@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from alibi_detect.cd import KolmogorovSmirnov
 import logging
 
 def detect_drift(reference_df, current_df, p_value_threshold=0.05):
