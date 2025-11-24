@@ -24,6 +24,8 @@ spec:
             repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
             branch: main
             subPath: apps/airflow/dags
+        defaultAirflowRepository: davidm094/mlops-airflow
+        defaultAirflowTag: latest
         images:
           airflow:
             repository: davidm094/mlops-airflow
