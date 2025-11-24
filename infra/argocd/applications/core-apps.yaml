@@ -24,11 +24,27 @@ spec:
             repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
             branch: main
             subPath: apps/airflow/dags
+        
+        # --- IMAGE CONFIGURATION (Redundant Strategy) ---
+        # 1. Modern/Community Chart Structure
         images:
           airflow:
             repository: davidm094/mlops-airflow
             tag: v1
             pullPolicy: Always
+        
+        # 2. Legacy Chart Structure
+        airflow:
+          image:
+            repository: davidm094/mlops-airflow
+            tag: v1
+            pullPolicy: Always
+
+        # 3. Global Defaults (Very Old Charts)
+        defaultAirflowRepository: davidm094/mlops-airflow
+        defaultAirflowTag: v1
+        # ------------------------------------------------
+        
         env:
           - name: AIRFLOW_VAR_S3_ENDPOINT
             value: "http://seaweedfs-s3.mlops.svc:8333"
