@@ -24,6 +24,11 @@ spec:
             repo: https://github.com/davidm094/MLOPS_Proyecto_Final.git
             branch: main
             subPath: apps/airflow/dags
+        images:
+          airflow:
+            repository: davidm094/mlops-airflow
+            tag: latest
+            pullPolicy: Always
         env:
           - name: AIRFLOW_VAR_S3_ENDPOINT
             value: "http://seaweedfs-s3.mlops.svc:8333"
