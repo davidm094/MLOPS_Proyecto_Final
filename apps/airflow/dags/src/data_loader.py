@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 import logging
+import time
 
 DATA_SOURCE_URL = "http://10.43.100.103:8000"
 
@@ -18,7 +19,17 @@ def fetch_data(group_id="5"):
         logging.info(f"Fetched {len(df)} records from API.")
         return df
     except Exception as e:
-        logging.error(f"Error fetching data: {e}")
+        error_msg = f"Error fetching data: {e}"
+        logging.error(error_msg)
+        # Write error to file for debugging
+        try:
+            with open("/tmp/ingestion_error.log", "w") as f:
+                f.write(str(e))
+        except:
+            pass
+        
+        logging.info("Sleeping for 600 seconds to allow debugging via kubectl exec...")
+        time.sleep(600)
         raise
 
 def save_raw_data(df, path):
