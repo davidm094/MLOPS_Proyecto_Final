@@ -45,8 +45,8 @@ MODEL_INFO = Info('model', 'Information about the loaded model')
 MODEL_LOADED = Gauge('model_loaded', 'Whether a model is currently loaded')
 EXPLAINER_LOADED = Gauge('explainer_loaded', 'Whether SHAP explainer is loaded')
 
-# Initialize Prometheus instrumentation
-Instrumentator().instrument(app).expose(app)
+# Initialize Prometheus instrumentation (will be configured after routes)
+instrumentator = Instrumentator()
 
 # ============================================
 # CONFIGURATION
@@ -574,3 +574,6 @@ def get_metrics_summary():
     except Exception as e:
         logger.error(f"Failed to get metrics summary: {e}")
         return {"error": str(e)}
+
+# Initialize Prometheus instrumentation after all routes are defined
+instrumentator.instrument(app).expose(app)
