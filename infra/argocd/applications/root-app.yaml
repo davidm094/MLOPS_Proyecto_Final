@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/david/MLOPS_Proyecto_Final.git  # Placeholder: cambiar por URL real
+    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
     targetRevision: HEAD
     path: infra/argocd/applications
   destination:

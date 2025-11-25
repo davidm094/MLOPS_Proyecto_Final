@@ -1,5 +1,31 @@
 # Traefik is provided by K3d by default, no need to deploy custom one
 ---
+# Secrets must be deployed FIRST before other applications
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: secrets
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/davidm094/MLOPS_Proyecto_Final.git
+    targetRevision: HEAD
+    path: infra/manifests/secrets
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -247,9 +273,19 @@ spec:
           storageClass: "local-path"
         initdbScripts:
           init.sql: |
+            -- MLflow database
             CREATE USER mlflow WITH PASSWORD 'mlflow-password';
             CREATE DATABASE mlflow OWNER mlflow;
             GRANT ALL PRIVILEGES ON DATABASE mlflow TO mlflow;
+            
+            -- Airflow metadata database
+            CREATE USER airflow WITH PASSWORD 'airflow';
+            CREATE DATABASE airflow OWNER airflow;
+            GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+            
+            -- MLOps data tables database (raw_data, clean_data, inference_logs, etc.)
+            CREATE DATABASE mlops_data OWNER postgres;
+            GRANT ALL PRIVILEGES ON DATABASE mlops_data TO postgres;
         image:
           registry: docker.io
           repository: library/postgres

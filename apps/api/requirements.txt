@@ -12,3 +12,4 @@ sqlalchemy
 prometheus-fastapi-instrumentator
 prometheus-client
 xgboost
+scipy
