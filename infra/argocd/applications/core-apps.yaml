@@ -78,6 +78,11 @@ spec:
             value: "any"
           - name: AWS_SECRET_ACCESS_KEY
             value: "any"
+          # MLflow Configuration
+          - name: MLFLOW_TRACKING_URI
+            value: "http://mlflow:5000"
+          - name: MLFLOW_S3_ENDPOINT_URL
+            value: "http://seaweedfs-s3.mlops.svc:8333"
           - name: AIRFLOW__KUBERNETES__DELETE_WORKER_PODS
             value: "False"
           # Remote Logging Configuration
