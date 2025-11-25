@@ -51,32 +51,26 @@ def load_latest_model():
             logger.warning("No artifacts found in MLflow bucket")
             return False
             
-        # Find unique run IDs and get the latest one
-        run_ids = set()
+        # Find run IDs with their latest modification time
+        run_times = {}
         for obj in response['Contents']:
             parts = obj['Key'].split('/')
-            if len(parts) >= 2:
-                run_ids.add(parts[1])  # Format: experiment_id/run_id/artifacts/...
+            if len(parts) >= 2 and 'model.pkl' in obj['Key']:
+                run_id = parts[1]
+                last_modified = obj['LastModified']
+                if run_id not in run_times or last_modified > run_times[run_id]:
+                    run_times[run_id] = last_modified
         
-        if not run_ids:
-            logger.warning("No run IDs found")
+        if not run_times:
+            logger.warning("No run IDs with models found")
             return False
             
-        # Get the most recent run (by checking for model.pkl existence)
-        latest_run = None
-        for run_id in run_ids:
-            try:
-                s3.head_object(Bucket=MLFLOW_BUCKET, Key=f"2/{run_id}/artifacts/model/model.pkl")
-                latest_run = run_id
-            except:
-                continue
+        # Get the most recent run by modification time
+        latest_run = max(run_times.keys(), key=lambda x: run_times[x])
+        logger.info(f"Found {len(run_times)} models, selecting most recent: {latest_run}")
         
-        if not latest_run:
-            logger.warning("No valid model found")
-            return False
-            
         model_run_id = latest_run
-        logger.info(f"Loading model from run: {model_run_id}")
+        logger.info(f"Loading model from run: {model_run_id} (modified: {run_times[latest_run]})")
         
         # Load model
         model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/model/model.pkl")
