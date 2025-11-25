@@ -39,7 +39,7 @@ def get_s3_client():
     )
 
 def load_latest_model():
-    """Load the latest model and explainer from S3/MLflow artifacts."""
+    """Load the latest model from S3/MLflow artifacts and create explainer on-demand."""
     global model, explainer, model_run_id
     
     try:
@@ -83,13 +83,13 @@ def load_latest_model():
         model = joblib.load(BytesIO(model_obj['Body'].read()))
         logger.info("Model loaded successfully")
         
-        # Load explainer
+        # Create SHAP explainer on-demand (more reliable than loading serialized)
         try:
-            explainer_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/explainer.pkl")
-            explainer = joblib.load(BytesIO(explainer_obj['Body'].read()))
-            logger.info("SHAP Explainer loaded successfully")
+            import shap
+            explainer = shap.TreeExplainer(model)
+            logger.info("SHAP Explainer created successfully")
         except Exception as e:
-            logger.warning(f"Could not load explainer: {e}. SHAP explanations will be unavailable.")
+            logger.warning(f"Could not create explainer: {e}. SHAP explanations will be unavailable.")
             explainer = None
             
         return True
