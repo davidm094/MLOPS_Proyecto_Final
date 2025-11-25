@@ -21,6 +21,9 @@ k3d cluster create mlops-cluster \
     -p "30800:30800@server:0" \
     -p "30500:30500@server:0" \
     -p "30501:30501@server:0" \
+    -p "30090:30090@server:0" \
+    -p "30300:30300@server:0" \
+    -p "30903:30903@server:0" \
     --agents 1
 
 echo ""
@@ -39,9 +42,12 @@ kubectl get nodes
 echo "---------------------------------------------------"
 echo ""
 echo "📝 Puertos mapeados:"
-echo "   30080 → Argo CD (HTTPS)"
-echo "   30443 → Airflow"
+echo "   30080 → Airflow"
+echo "   30443 → Argo CD"
 echo "   30800 → API"
 echo "   30500 → MLflow"
 echo "   30501 → Frontend"
+echo "   30090 → Prometheus"
+echo "   30300 → Grafana"
+echo "   30903 → AlertManager"
 echo "---------------------------------------------------"
