@@ -15,7 +15,7 @@ from io import BytesIO
 from datetime import datetime
 from sqlalchemy import create_engine, text
 from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Counter, Histogram, Gauge, Info
+from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -45,8 +45,7 @@ MODEL_INFO = Info('model', 'Information about the loaded model')
 MODEL_LOADED = Gauge('model_loaded', 'Whether a model is currently loaded')
 EXPLAINER_LOADED = Gauge('explainer_loaded', 'Whether SHAP explainer is loaded')
 
-# Initialize Prometheus instrumentation (will be configured after routes)
-instrumentator = Instrumentator()
+# Prometheus instrumentation will be initialized after all routes are defined
 
 # ============================================
 # CONFIGURATION
@@ -260,6 +259,9 @@ def load_latest_model_from_s3():
 @app.on_event("startup")
 async def startup_event():
     load_production_model()
+    # Initialize Prometheus instrumentation after app is fully loaded
+    # This ensures all routes are registered before instrumentation
+    instrumentator.instrument(app)
 
 # ============================================
 # PYDANTIC MODELS
@@ -363,7 +365,7 @@ def root():
         "features": feature_names
     }
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", response_model=HealthResponse, include_in_schema=False)
 def health():
     db_connected = False
     try:
@@ -382,7 +384,7 @@ def health():
         database_connected=db_connected
     )
 
-@app.get("/ready")
+@app.get("/ready", include_in_schema=False)
 def ready():
     """Readiness probe - returns 200 only if model is loaded."""
     if model is None:
@@ -575,5 +577,14 @@ def get_metrics_summary():
         logger.error(f"Failed to get metrics summary: {e}")
         return {"error": str(e)}
 
-# Initialize Prometheus instrumentation after all routes are defined
-instrumentator.instrument(app).expose(app)
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint."""
+    from fastapi.responses import Response
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+# Prometheus Instrumentator - will be initialized in startup event
+# Exclude health check endpoints to avoid conflicts
+instrumentator = Instrumentator(
+    excluded_handlers=["/health", "/ready", "/", "/metrics"]
+)
