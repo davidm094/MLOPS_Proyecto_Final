@@ -35,6 +35,8 @@ def ensure_bucket_exists(s3, bucket_name):
 def fetch_data(group_number="5", day="Tuesday"):
     """
     Fetches data from the external API using query parameters.
+    The API returns: {"group_number": X, "day": Y, "batch_number": Z, "data": [...]}
+    We extract the "data" array and convert it to a DataFrame.
     """
     try:
         url = f"{DATA_SOURCE_URL}/data"
@@ -43,11 +45,24 @@ def fetch_data(group_number="5", day="Tuesday"):
             "day": day
         }
         logging.info(f"Requesting data from URL: {url} with params: {params}")
-        response = requests.get(url, params=params, timeout=30)
+        response = requests.get(url, params=params, timeout=60)
         response.raise_for_status()
-        data = response.json()
-        df = pd.DataFrame(data)
+        
+        json_response = response.json()
+        
+        # Extract the actual data array from the response
+        if isinstance(json_response, dict) and 'data' in json_response:
+            records = json_response['data']
+            logging.info(f"API returned batch_number: {json_response.get('batch_number', 'N/A')}")
+        elif isinstance(json_response, list):
+            # If API returns a list directly
+            records = json_response
+        else:
+            raise ValueError(f"Unexpected API response format: {type(json_response)}")
+        
+        df = pd.DataFrame(records)
         logging.info(f"Fetched {len(df)} records from API.")
+        logging.info(f"Columns: {df.columns.tolist()}")
         return df
     except Exception as e:
         error_msg = f"Error fetching data: {e}"
