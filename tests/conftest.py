@@ -8,6 +8,13 @@ from unittest.mock import MagicMock, patch
 import sys
 import os
 
+# Mock fastapi middleware module before any imports
+# This is needed because the API now uses BaseHTTPMiddleware
+if 'fastapi.middleware.base' not in sys.modules:
+    mock_middleware = MagicMock()
+    mock_middleware.BaseHTTPMiddleware = MagicMock
+    sys.modules['fastapi.middleware.base'] = mock_middleware
+
 # Add apps to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'apps', 'api', 'src'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'apps', 'airflow', 'dags', 'src'))
