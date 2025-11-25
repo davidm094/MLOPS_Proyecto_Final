@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: davidm094/mlops-api:v5
+        image: davidm094/mlops-api:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
