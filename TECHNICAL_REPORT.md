@@ -905,6 +905,122 @@ MLOPS_Proyecto_Final/
 | Airflow | admin | admin |
 | Argo CD | admin | (ver secret) |
 | PostgreSQL | postgres | airflow-postgres-root |
+| Grafana | admin | admin |
+
+---
+
+## Apéndice D: Mejoras Implementadas (Fase 2)
+
+### D.1 Observabilidad (Prometheus + Grafana)
+
+Se implementó un stack completo de observabilidad:
+
+```yaml
+# Componentes desplegados
+- Prometheus: Recolección de métricas
+- Grafana: Visualización y dashboards
+- AlertManager: Gestión de alertas
+- Node Exporter: Métricas de nodos
+- Kube State Metrics: Métricas de Kubernetes
+```
+
+**Métricas de la API:**
+- `predictions_total`: Contador de predicciones por estado y versión
+- `prediction_latency_seconds`: Histograma de latencia
+- `prediction_price_dollars`: Distribución de precios predichos
+- `model_loaded`: Gauge indicando estado del modelo
+
+**Alertas configuradas:**
+- API down > 1 minuto (Critical)
+- Latencia p95 > 2 segundos (Warning)
+- Error rate > 5% (Warning)
+- Modelo no cargado > 2 minutos (Critical)
+
+### D.2 Almacenamiento en PostgreSQL
+
+Se migraron los datos de S3 a PostgreSQL para mejor persistencia y consultas:
+
+```sql
+-- Tablas creadas
+raw_data          -- Datos crudos de la API externa
+clean_data        -- Datos preprocesados
+inference_logs    -- Registro de predicciones
+drift_history     -- Historial de detección de drift
+model_history     -- Historial de modelos entrenados
+```
+
+**Beneficios:**
+- Consultas SQL para análisis
+- Trazabilidad completa de predicciones
+- Historial de drift y modelos
+- Backup y recuperación estándar
+
+### D.3 Mejoras del Modelo
+
+**Algoritmo:**
+- Migración a XGBoost (con fallback a HistGradientBoosting)
+- Hyperparameter tuning con Optuna (10 trials)
+- Transformación logarítmica del target
+
+**Feature Engineering:**
+- `state_price_mean`: Target encoding por estado
+- `bed_bath_interaction`: bed × bath
+- `size_per_bed`: house_size / (bed + 1)
+- `size_per_bath`: house_size / (bath + 1)
+- `total_rooms`: bed + bath
+- `lot_to_house_ratio`: acre_lot × 43560 / house_size
+
+**Auto-Promoción:**
+- R² ≥ 0.35 → Promoción a Production
+- RMSE ≤ $700K → Promoción a Production
+
+### D.4 Testing
+
+**Tests Unitarios (pytest):**
+- `test_api.py`: Tests de endpoints FastAPI
+- `test_pipeline.py`: Tests de preprocessing y drift detection
+- Coverage mínimo: 70%
+
+**Tests de Carga (Locust):**
+- Simulación de 100 usuarios concurrentes
+- Endpoints probados: /predict, /explain, /health
+- Métricas: p95 latency, error rate, throughput
+
+### D.5 Seguridad
+
+**Kubernetes Secrets:**
+- `s3-credentials`: Credenciales de SeaweedFS
+- `postgres-credentials`: Credenciales de PostgreSQL
+- `mlflow-credentials`: URI de tracking
+
+**Dockerfiles optimizados:**
+- Multi-stage builds para menor tamaño
+- Usuario no-root para seguridad
+- Health checks integrados
+
+### D.6 CI/CD Mejorado
+
+```yaml
+# Nuevo pipeline de GitHub Actions
+jobs:
+  test:        # pytest + coverage
+  lint:        # flake8 + black
+  build:       # Docker multi-stage
+  security:    # Trivy vulnerability scan
+  load-test:   # Locust smoke test (PRs)
+```
+
+### D.7 URLs de Acceso Actualizadas
+
+| Servicio | URL | Descripción |
+|----------|-----|-------------|
+| API | http://localhost:30800 | Predicción e inferencia |
+| Frontend | http://localhost:30501 | UI Streamlit |
+| MLflow | http://localhost:30500 | Experiment tracking |
+| Airflow | http://localhost:30080 | Pipeline orchestration |
+| Argo CD | http://localhost:30443 | GitOps |
+| Grafana | http://localhost:30300 | Dashboards |
+| Prometheus | http://localhost:30090 | Métricas |
 
 ---
 

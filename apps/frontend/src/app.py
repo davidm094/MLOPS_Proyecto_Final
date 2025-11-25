@@ -48,6 +48,8 @@ st.markdown("""
         text-align: center;
         border-left: 4px solid #667eea;
     }
+    .status-ok { color: #27ae60; }
+    .status-error { color: #e74c3c; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,7 +65,6 @@ def get_available_states():
             return [s['state'] for s in data.get('states', [])]
     except:
         pass
-    # Fallback list of common states
     return ["California", "Texas", "Florida", "New York", "Arizona", "Colorado", 
             "Washington", "Oregon", "Nevada", "Hawaii", "Massachusetts", "Illinois"]
 
@@ -80,6 +81,7 @@ with st.sidebar:
         st.write(f"Stage: {model_info.get('model_stage', 'N/A')}")
         st.write(f"Model Loaded: {'✅' if health.get('model_loaded') else '❌'}")
         st.write(f"Explainer: {'✅' if health.get('explainer_loaded') else '❌'}")
+        st.write(f"Database: {'✅' if health.get('database_connected') else '❌'}")
         
         if st.button("🔄 Reload Model"):
             try:
@@ -99,20 +101,31 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📊 Model Info")
     st.markdown("""
-    **Algorithm:** HistGradientBoosting
+    **Algorithm:** XGBoost / HistGradientBoosting
     
     **Key Features:**
     - Property characteristics
     - Location (state) encoding
     - Feature interactions
+    - Optuna hyperparameter tuning
     
-    **Metrics:**
-    - R²: ~0.47
-    - MAPE: ~31%
+    **Auto-Promotion:**
+    - R² ≥ 0.35
+    - RMSE ≤ $700K
+    """)
+    
+    st.markdown("---")
+    st.markdown("### 🔗 Quick Links")
+    st.markdown("""
+    - [📊 Grafana](http://localhost:30300)
+    - [📈 Prometheus](http://localhost:30090)
+    - [🔬 MLflow](http://localhost:30500)
+    - [🌀 Airflow](http://localhost:30080)
+    - [🚀 Argo CD](http://localhost:30443)
     """)
 
 # Main content
-tabs = st.tabs(["🏠 Predict Price", "📊 SHAP Explanation", "🗺️ Compare Locations", "📈 Model Info"])
+tabs = st.tabs(["🏠 Predict Price", "📊 SHAP Explanation", "🗺️ Compare Locations", "📈 Model Info", "📉 Metrics"])
 
 # Tab 1: Prediction
 with tabs[0]:
@@ -192,6 +205,7 @@ with tabs[0]:
                     <p class="price-label">Estimated Property Value in {state}</p>
                     <p class="price-value">${result['price']:,.0f}</p>
                     <p class="price-label">Model v{result.get('model_version', 'N/A')} ({result.get('model_stage', 'N/A')})</p>
+                    <p class="price-label" style="font-size: 0.8rem;">Request ID: {result.get('request_id', 'N/A')[:8]}...</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -230,8 +244,8 @@ with tabs[1]:
                 response = requests.post(f"{API_URL}/explain", json=payload, timeout=30)
                 
                 if response.status_code == 503:
-                    st.warning("⚠️ SHAP explanations not available for this model type (HistGradientBoosting)")
-                    st.info("The model uses HistGradientBoostingRegressor which doesn't support TreeSHAP directly.")
+                    st.warning("⚠️ SHAP explanations not available")
+                    st.info("The explainer may not be loaded. Try reloading the model from the sidebar.")
                 else:
                     response.raise_for_status()
                     exp_data = response.json()
@@ -296,7 +310,7 @@ with tabs[2]:
     states_to_compare = st.multiselect(
         "Select states to compare",
         options=get_available_states(),
-        default=["California", "Texas", "Florida", "New York", "Hawaii"]
+        default=["California", "Texas", "Florida", "New York", "Hawaii"] if len(get_available_states()) >= 5 else get_available_states()[:5]
     )
     
     if st.button("📊 Compare Prices", type="primary"):
@@ -342,8 +356,9 @@ with tabs[2]:
                 plt.close()
                 
                 # Table
-                df['Price'] = df['Price'].apply(lambda x: f"${x:,.0f}")
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                df_display = df.copy()
+                df_display['Price'] = df_display['Price'].apply(lambda x: f"${x:,.0f}")
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
                 
                 # Insights
                 prices = [r['Price'] for r in results]
@@ -374,7 +389,7 @@ with tabs[3]:
                 "Name": model_info.get('model_name', 'N/A'),
                 "Version": model_info.get('model_version', 'N/A'),
                 "Stage": model_info.get('model_stage', 'N/A'),
-                "Run ID": model_info.get('model_run_id', 'N/A')[:12] + "...",
+                "Run ID": model_info.get('model_run_id', 'N/A')[:12] + "..." if model_info.get('model_run_id') else 'N/A',
                 "Features": len(model_info.get('feature_names', [])),
                 "States": len(model_info.get('available_states', []))
             })
@@ -390,24 +405,102 @@ with tabs[3]:
         
         st.markdown("---")
         
-        st.markdown("### 🎯 Model Performance")
+        st.markdown("### 🎯 Auto-Promotion Thresholds")
         st.markdown("""
-        | Metric | Value | Description |
-        |--------|-------|-------------|
-        | **R²** | ~0.47 | Explains 47% of price variance |
-        | **RMSE** | ~$532K | Average prediction error |
-        | **MAE** | ~$322K | Median prediction error |
-        | **MAPE** | ~31% | Average percentage error |
+        | Metric | Threshold | Description |
+        |--------|-----------|-------------|
+        | **R²** | ≥ 0.35 | Model must explain 35%+ of variance |
+        | **RMSE** | ≤ $700K | Average error must be below $700K |
         """)
         
-        st.markdown("### 🔗 Quick Links")
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.markdown("[🔬 MLflow](http://localhost:30500)")
-        with col_b:
-            st.markdown("[🌀 Airflow](http://localhost:30080)")
-        with col_c:
-            st.markdown("[🚀 Argo CD](http://localhost:30443)")
+        st.markdown("### 📊 Feature Engineering")
+        st.markdown("""
+        | Feature | Formula | Description |
+        |---------|---------|-------------|
+        | `state_price_mean` | Target encoding | Average price per state |
+        | `is_sold` | status == 'sold' | Binary sold indicator |
+        | `bed_bath_interaction` | bed × bath | Room interaction |
+        | `size_per_bed` | house_size / (bed+1) | Space per bedroom |
+        | `size_per_bath` | house_size / (bath+1) | Space per bathroom |
+        | `total_rooms` | bed + bath | Total room count |
+        | `lot_to_house_ratio` | acre_lot × 43560 / house_size | Lot efficiency |
+        """)
             
     except Exception as e:
         st.error(f"Could not fetch model info: {e}")
+
+# Tab 5: Metrics
+with tabs[4]:
+    st.header("📉 API Metrics & History")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📊 Prediction Summary (24h)")
+        try:
+            summary = requests.get(f"{API_URL}/metrics/summary", timeout=5).json()
+            if 'error' not in summary:
+                st.metric("Total Predictions", f"{summary.get('total_predictions', 0):,}")
+                st.metric("Avg Price", f"${summary.get('avg_price', 0):,.0f}")
+                st.metric("Avg Response Time", f"{summary.get('avg_response_time_ms', 0):.1f}ms")
+                st.metric("Unique States", f"{summary.get('unique_states', 0)}")
+            else:
+                st.warning("Metrics not available yet")
+        except Exception as e:
+            st.warning(f"Could not fetch metrics: {e}")
+    
+    with col2:
+        st.markdown("### 📜 Recent Predictions")
+        try:
+            history = requests.get(f"{API_URL}/predictions/history?limit=10", timeout=5).json()
+            predictions = history.get('predictions', [])
+            if predictions:
+                df = pd.DataFrame(predictions)
+                if 'timestamp' in df.columns:
+                    df['timestamp'] = pd.to_datetime(df['timestamp']).dt.strftime('%H:%M:%S')
+                if 'predicted_price' in df.columns:
+                    df['predicted_price'] = df['predicted_price'].apply(lambda x: f"${x:,.0f}" if x else "N/A")
+                
+                display_cols = ['timestamp', 'state', 'bed', 'bath', 'predicted_price']
+                display_cols = [c for c in display_cols if c in df.columns]
+                st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
+            else:
+                st.info("No predictions recorded yet")
+        except Exception as e:
+            st.warning(f"Could not fetch history: {e}")
+    
+    st.markdown("---")
+    st.markdown("### 🔗 Monitoring Dashboards")
+    
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.markdown("""
+        **📊 Grafana**
+        
+        [Open Dashboard](http://localhost:30300)
+        
+        - API request rates
+        - Latency percentiles
+        - Error rates
+        - Model status
+        """)
+    with col_b:
+        st.markdown("""
+        **📈 Prometheus**
+        
+        [Open UI](http://localhost:30090)
+        
+        - Raw metrics
+        - Custom queries
+        - Alert rules
+        """)
+    with col_c:
+        st.markdown("""
+        **🔬 MLflow**
+        
+        [Open UI](http://localhost:30500)
+        
+        - Experiment tracking
+        - Model registry
+        - Artifact storage
+        """)

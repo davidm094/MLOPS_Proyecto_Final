@@ -30,19 +30,19 @@ spec:
         images:
           airflow:
             repository: davidm094/mlops-airflow
-            tag: v3
+            tag: v4
             pullPolicy: Always
         
         # 2. Legacy Chart Structure
         airflow:
           image:
             repository: davidm094/mlops-airflow
-            tag: v3
+            tag: v4
             pullPolicy: Always
 
         # 3. Global Defaults (Very Old Charts)
         defaultAirflowRepository: davidm094/mlops-airflow
-        defaultAirflowTag: v3
+        defaultAirflowTag: v4
         # ------------------------------------------------
         
         env:
@@ -63,6 +63,12 @@ spec:
             value: "my_s3_conn"
           - name: AIRFLOW_CONN_MY_S3_CONN
             value: "aws://any:any@?endpoint_url=http%3A%2F%2Fseaweedfs-s3.mlops.svc%3A8333"
+          # PostgreSQL for data tables (not metadata)
+          - name: DATABASE_URL
+            value: "postgresql://postgres:airflow-postgres-root@postgres-postgresql.mlops.svc.cluster.local:5432/mlops_data"
+          # API URL for reload notifications
+          - name: API_URL
+            value: "http://api:8000"
         createUserJob:
           useHelmHooks: false
           applyCustomEnv: false
