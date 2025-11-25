@@ -195,7 +195,7 @@ class PredictionResponse(BaseModel):
     model_stage: str
     model_run_id: str
     features_used: List[str]
-    input_summary: Dict[str, float]
+    input_summary: Dict
 
 class ExplanationResponse(BaseModel):
     price: float
