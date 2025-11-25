@@ -30,19 +30,19 @@ spec:
         images:
           airflow:
             repository: davidm094/mlops-airflow
-            tag: v2
+            tag: v3
             pullPolicy: Always
         
         # 2. Legacy Chart Structure
         airflow:
           image:
             repository: davidm094/mlops-airflow
-            tag: v2
+            tag: v3
             pullPolicy: Always
 
         # 3. Global Defaults (Very Old Charts)
         defaultAirflowRepository: davidm094/mlops-airflow
-        defaultAirflowTag: v2
+        defaultAirflowTag: v3
         # ------------------------------------------------
         
         env:
