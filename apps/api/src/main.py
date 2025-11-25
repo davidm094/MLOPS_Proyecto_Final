@@ -289,11 +289,12 @@ def load_latest_model_from_s3():
         MODEL_LOADED.set(0)
         return False
 
+# Add Prometheus middleware (excludes health checks)
+app.add_middleware(PrometheusMiddleware)
+
 @app.on_event("startup")
 async def startup_event():
     load_production_model()
-    # Add Prometheus middleware (excludes health checks)
-    app.add_middleware(PrometheusMiddleware)
     logger.info("Prometheus middleware initialized")
 
 # ============================================
