@@ -261,7 +261,12 @@ async def startup_event():
     load_production_model()
     # Initialize Prometheus instrumentation after app is fully loaded
     # This ensures all routes are registered before instrumentation
-    instrumentator.instrument(app)
+    # Only instrument, don't expose (we have manual /metrics endpoint)
+    try:
+        instrumentator.instrument(app)
+        logger.info("Prometheus instrumentation initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Prometheus instrumentation: {e}")
 
 # ============================================
 # PYDANTIC MODELS
