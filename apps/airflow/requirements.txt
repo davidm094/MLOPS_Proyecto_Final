@@ -1,5 +1,5 @@
 apache-airflow
-mlflow
+mlflow==2.9.2
 scikit-learn
 pandas
 numpy

@@ -290,6 +290,17 @@ docker pull davidm094/mlops-api:latest
 # Si falla, verificar credenciales en GitHub Actions
 ```
 
+### Actualización de Imágenes (Airflow/API)
+Este proyecto utiliza la estrategia de **Tags Mutables** (`:v1`, `:latest`) con `imagePullPolicy: Always`.
+Para actualizar una imagen sin cambiar el tag:
+
+1. Push de la nueva imagen a DockerHub.
+2. Reiniciar los pods para forzar la descarga:
+```bash
+kubectl rollout restart deployment/airflow-scheduler -n mlops
+kubectl rollout restart deployment/airflow-webserver -n mlops
+```
+
 ## 📚 Referencias
 
 - [Documentación de K3d](https://k3d.io/)

@@ -124,6 +124,17 @@
 - Solución: Se corrigió el manifiesto del servicio para usar los labels correctos.
 - **Resultado Final:** Acceso exitoso a Airflow UI en `http://localhost:30443`.
 
+#### Phase 10: Image Update & Sync Policy (2025-11-23 23:59 UTC)
+- **Issue:** Airflow pods stuck on `apache/airflow:2.6.2` despite manual updates.
+- **Cause:** Argo CD "Self-Heal" reverted manual `kubectl set image` changes to the state defined in Git (which defaulted to chart values).
+- **Diagnosis:** Used `References/K8S_updates.md` to identify Strategy 2 (Mutable Tags with `imagePullPolicy: Always`) as the appropriate fix for the current phase.
+- **Fix:**
+  1. Updated `infra/argocd/applications/core-apps.yaml` to explicitly define `images.airflow` with `repository: davidm094/mlops-airflow`, `tag: v1`, and `pullPolicy: Always`.
+  2. Removed redundant/conflicting image configurations in `core-apps.yaml` to ensure clean Helm rendering.
+  3. Pushed changes to Git so Argo CD could sync the correct desired state.
+  4. Performed Hard Refresh and Sync in Argo CD.
+- **Result:** Argo CD successfully applied the custom image `v1`. Pods restarted and pulled the new image containing necessary ML libraries (`scikit-learn`).
+
 ### Current Status
 **All components ready and accessible:**
 
@@ -133,6 +144,7 @@
 ✅ Updated Argo CD applications (all 8 apps defined)
 ✅ Comprehensive documentation
 ✅ LoadBalancer-based networking (no Ingress complexity)
+✅ **Airflow Image Sync:** Fixed and verified.
 
 ### Access URLs (Post-Deployment)
 - Argo CD: http://localhost:30080 (admin / password del secret)
@@ -148,6 +160,7 @@
 4. **Local Development:** K3d provides excellent local K8s experience with minimal overhead
 5. **GitOps Challenges:** Argo CD sync requires proper repo access and can cache aggressively
 6. **Helm Legacy:** Older charts (Airflow 1.10) use non-standard labels and service definitions, requiring manual overrides.
+7. **GitOps vs Manual:** Never mix `kubectl` manual changes with Argo CD automated syncs; they will fight. Always update Git.
 
 ### Next Steps (User Actions Required)
 1. Verify ML pipeline execution end-to-end
