@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 import pandas as pd
 import numpy as np
 import shap
@@ -25,19 +25,17 @@ AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "any")
 MLFLOW_BUCKET = "mlflow-artifacts"
 MODEL_NAME = "real_estate_model"
 
-# Feature configuration
-NUMERIC_FEATURES = ['bed', 'bath', 'acre_lot', 'house_size']
-ENGINEERED_FEATURES = ['bed_bath_ratio', 'sqft_per_bed', 'total_rooms', 'is_sold']
-CATEGORICAL_FEATURES = ['state']
-ALL_FEATURES = NUMERIC_FEATURES + ENGINEERED_FEATURES + CATEGORICAL_FEATURES
-
 # Global variables
 model = None
-raw_model = None
+state_means = None  # For state encoding
 explainer = None
 model_version = None
 model_stage = None
 model_run_id = None
+feature_names = None
+
+# Default state mean for unknown states
+DEFAULT_STATE_MEAN = 1_000_000
 
 def get_s3_client():
     return boto3.client(
@@ -49,13 +47,13 @@ def get_s3_client():
 
 def load_production_model():
     """Load the model marked as 'Production' in MLflow Model Registry."""
-    global model, raw_model, explainer, model_version, model_stage, model_run_id
+    global model, state_means, explainer, model_version, model_stage, model_run_id, feature_names
     
     try:
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         client = mlflow.tracking.MlflowClient()
         
-        # Get Production model
+        # Get Production model from registry
         try:
             versions = client.get_latest_versions(MODEL_NAME, stages=["Production"])
             if versions:
@@ -66,55 +64,78 @@ def load_production_model():
                 
                 logger.info(f"Found Production model: {MODEL_NAME} v{model_version} (run: {model_run_id})")
                 
-                # Load using mlflow.sklearn (handles Pipeline correctly)
-                model_uri = f"runs:/{model_run_id}/model"
-                model = mlflow.sklearn.load_model(model_uri)
-                logger.info("Loaded sklearn model from MLflow")
+                s3 = get_s3_client()
                 
-                # Try to load raw model for SHAP
+                # Load model
                 try:
-                    s3 = get_s3_client()
-                    raw_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/raw_model.pkl")
-                    raw_model = joblib.load(BytesIO(raw_obj['Body'].read()))
-                    explainer = shap.TreeExplainer(raw_model)
-                    logger.info("Loaded raw model and created SHAP explainer")
+                    # Try sklearn model path first
+                    model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/model/model.pkl")
+                    model = joblib.load(BytesIO(model_obj['Body'].read()))
+                    logger.info("Model loaded successfully")
                 except Exception as e:
-                    logger.warning(f"Could not load raw model for SHAP: {e}")
-                    raw_model = None
+                    logger.error(f"Could not load model: {e}")
+                    return False
+                
+                # Load state_means for feature engineering
+                try:
+                    state_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/state_means.pkl")
+                    state_means = joblib.load(BytesIO(state_obj['Body'].read()))
+                    logger.info(f"Loaded state_means with {len(state_means)} states")
+                except Exception as e:
+                    logger.warning(f"Could not load state_means: {e}. Using defaults.")
+                    state_means = {}
+                
+                # Load feature names
+                try:
+                    feat_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/features.txt")
+                    feature_names = feat_obj['Body'].read().decode('utf-8').strip().split('\n')
+                    logger.info(f"Feature names: {feature_names}")
+                except Exception as e:
+                    logger.warning(f"Could not load feature names: {e}")
+                    feature_names = ['bed', 'bath', 'acre_lot', 'house_size']
+                
+                # Create SHAP explainer (if possible)
+                try:
+                    explainer = shap.TreeExplainer(model)
+                    logger.info("SHAP Explainer created")
+                except Exception as e:
+                    logger.warning(f"Could not create explainer: {e}")
                     explainer = None
                 
                 return True
             else:
                 logger.warning(f"No Production model found for '{MODEL_NAME}'")
-        except Exception as e:
-            logger.warning(f"Error loading from registry: {e}")
+        except mlflow.exceptions.MlflowException as e:
+            logger.warning(f"Model '{MODEL_NAME}' not registered: {e}")
         
         # Fallback to latest S3 model
         return load_latest_model_from_s3()
         
     except Exception as e:
         logger.error(f"Error loading production model: {e}")
-        return False
+        return load_latest_model_from_s3()
 
 def load_latest_model_from_s3():
-    """Fallback: Load latest model from S3."""
-    global model, raw_model, explainer, model_version, model_stage, model_run_id
+    """Fallback: Load the most recent model from S3."""
+    global model, state_means, explainer, model_version, model_stage, model_run_id, feature_names
     
     try:
         s3 = get_s3_client()
         response = s3.list_objects_v2(Bucket=MLFLOW_BUCKET)
         
         if 'Contents' not in response:
+            logger.warning("No artifacts found in MLflow bucket")
             return False
         
-        # Find latest model.pkl
+        # Find most recent model
         run_times = {}
         for obj in response['Contents']:
-            if 'model/model.pkl' in obj['Key']:
-                parts = obj['Key'].split('/')
-                if len(parts) >= 2:
-                    run_id = parts[1]
-                    run_times[run_id] = obj['LastModified']
+            parts = obj['Key'].split('/')
+            if len(parts) >= 2 and 'model.pkl' in obj['Key'] and 'artifacts/model/' in obj['Key']:
+                run_id = parts[1]
+                last_modified = obj['LastModified']
+                if run_id not in run_times or last_modified > run_times[run_id]:
+                    run_times[run_id] = last_modified
         
         if not run_times:
             return False
@@ -124,15 +145,34 @@ def load_latest_model_from_s3():
         model_version = "latest"
         model_stage = "Fallback"
         
-        # Load model
+        logger.info(f"Loading model from run: {model_run_id}")
+        
         model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/model/model.pkl")
         model = joblib.load(BytesIO(model_obj['Body'].read()))
-        logger.info(f"Loaded model from S3: {model_run_id}")
+        
+        # Try to load state_means
+        try:
+            state_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/state_means.pkl")
+            state_means = joblib.load(BytesIO(state_obj['Body'].read()))
+        except:
+            state_means = {}
+        
+        # Try to load feature names
+        try:
+            feat_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/features.txt")
+            feature_names = feat_obj['Body'].read().decode('utf-8').strip().split('\n')
+        except:
+            feature_names = ['bed', 'bath', 'acre_lot', 'house_size']
+        
+        try:
+            explainer = shap.TreeExplainer(model)
+        except:
+            explainer = None
         
         return True
         
     except Exception as e:
-        logger.error(f"Error loading from S3: {e}")
+        logger.error(f"Error loading model from S3: {e}")
         return False
 
 @app.on_event("startup")
@@ -142,9 +182,9 @@ async def startup_event():
 class PropertyInput(BaseModel):
     bed: float = 3.0
     bath: float = 2.0
-    acre_lot: float = 0.1
-    house_size: float = 1500.0
-    state: str = "California"
+    acre_lot: float = 0.25
+    house_size: float = 1800.0
+    state: Optional[str] = "California"
     status: Optional[str] = "for_sale"
     city: Optional[str] = None
     zip_code: Optional[str] = None
@@ -155,6 +195,7 @@ class PredictionResponse(BaseModel):
     model_stage: str
     model_run_id: str
     features_used: List[str]
+    input_summary: Dict[str, float]
 
 class ExplanationResponse(BaseModel):
     price: float
@@ -171,29 +212,48 @@ class ModelInfo(BaseModel):
     model_run_id: str
     model_loaded: bool
     explainer_loaded: bool
-    features: List[str]
+    available_states: List[str]
+    feature_names: List[str]
 
 def prepare_features(input_data: PropertyInput) -> pd.DataFrame:
     """Prepare all features including engineered ones."""
-    bed = float(input_data.bed) if input_data.bed else 0
-    bath = float(input_data.bath) if input_data.bath else 0
-    acre_lot = float(input_data.acre_lot) if input_data.acre_lot else 0
-    house_size = float(input_data.house_size) if input_data.house_size else 0
-    state = input_data.state if input_data.state else "California"
+    bed = float(input_data.bed) if input_data.bed else 3.0
+    bath = float(input_data.bath) if input_data.bath else 2.0
+    acre_lot = float(input_data.acre_lot) if input_data.acre_lot else 0.25
+    house_size = float(input_data.house_size) if input_data.house_size else 1800.0
+    
+    # Get state mean (target encoding)
+    state = input_data.state or "California"
+    if state_means and state in state_means:
+        state_price_mean = state_means[state]
+    elif state_means:
+        state_price_mean = np.mean(list(state_means.values()))
+    else:
+        state_price_mean = DEFAULT_STATE_MEAN
+    
+    # Status encoding
     is_sold = 1 if input_data.status == "sold" else 0
     
+    # Feature engineering
     data = {
-        'bed': [bed],
-        'bath': [bath],
-        'acre_lot': [acre_lot],
-        'house_size': [house_size],
-        'bed_bath_ratio': [bed / (bath + 0.1)],
-        'sqft_per_bed': [house_size / (bed + 0.1)],
-        'total_rooms': [bed + bath],
-        'is_sold': [is_sold],
-        'state': [state]
+        'bed': bed,
+        'bath': bath,
+        'acre_lot': acre_lot,
+        'house_size': house_size,
+        'state_price_mean': state_price_mean,
+        'is_sold': is_sold,
+        'bed_bath_interaction': bed * bath,
+        'size_per_bed': house_size / (bed + 1),
+        'size_per_bath': house_size / (bath + 1),
+        'total_rooms': bed + bath,
+        'lot_to_house_ratio': acre_lot * 43560 / (house_size + 1)
     }
-    return pd.DataFrame(data)
+    
+    # Only include features the model expects
+    if feature_names:
+        data = {k: v for k, v in data.items() if k in feature_names}
+    
+    return pd.DataFrame([data])
 
 @app.get("/")
 def root():
@@ -206,18 +266,20 @@ def root():
         "model_run_id": model_run_id,
         "model_loaded": model is not None,
         "explainer_loaded": explainer is not None,
-        "features": ALL_FEATURES
+        "features": feature_names
     }
 
 @app.get("/health")
 def health():
     return {
         "status": "healthy",
-        "model_loaded": model is not None
+        "model_loaded": model is not None,
+        "explainer_loaded": explainer is not None
     }
 
 @app.get("/model", response_model=ModelInfo)
 def get_model_info():
+    """Get information about the currently loaded model."""
     return ModelInfo(
         model_name=MODEL_NAME,
         model_version=model_version or "unknown",
@@ -225,8 +287,19 @@ def get_model_info():
         model_run_id=model_run_id or "unknown",
         model_loaded=model is not None,
         explainer_loaded=explainer is not None,
-        features=ALL_FEATURES
+        available_states=list(state_means.keys()) if state_means else [],
+        feature_names=feature_names or []
     )
+
+@app.get("/states")
+def get_states():
+    """Get list of available states and their average prices."""
+    if state_means:
+        sorted_states = sorted(state_means.items(), key=lambda x: x[1], reverse=True)
+        return {
+            "states": [{"state": k, "avg_price": v} for k, v in sorted_states]
+        }
+    return {"states": []}
 
 @app.post("/reload")
 def reload_model():
@@ -238,7 +311,8 @@ def reload_model():
             "model_name": MODEL_NAME,
             "model_version": model_version,
             "model_stage": model_stage,
-            "run_id": model_run_id
+            "run_id": model_run_id,
+            "features": feature_names
         }
     else:
         raise HTTPException(status_code=500, detail="Failed to reload model")
@@ -247,7 +321,7 @@ def reload_model():
 def predict(input_data: PropertyInput):
     """Predict property price."""
     if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
+        raise HTTPException(status_code=503, detail="Model not loaded. Call /reload first.")
     
     try:
         df = prepare_features(input_data)
@@ -258,7 +332,14 @@ def predict(input_data: PropertyInput):
             model_version=model_version or "unknown",
             model_stage=model_stage or "unknown",
             model_run_id=model_run_id or "unknown",
-            features_used=ALL_FEATURES
+            features_used=list(df.columns),
+            input_summary={
+                "bed": input_data.bed,
+                "bath": input_data.bath,
+                "acre_lot": input_data.acre_lot,
+                "house_size": input_data.house_size,
+                "state": input_data.state or "California"
+            }
         )
     except Exception as e:
         logger.error(f"Prediction error: {e}")
@@ -270,57 +351,65 @@ def explain(input_data: PropertyInput):
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     if explainer is None:
-        raise HTTPException(status_code=503, detail="SHAP Explainer not available for this model")
+        raise HTTPException(status_code=503, detail="SHAP Explainer not available for this model type")
     
     try:
         df = prepare_features(input_data)
         prediction = model.predict(df)
         
-        # Get preprocessed features for SHAP
-        # Note: SHAP values are on log scale since raw_model works on log-transformed target
-        preprocessor = model.named_steps['preprocessor']
-        X_transformed = preprocessor.transform(df)
-        
-        shap_values = explainer.shap_values(X_transformed)
+        # Get SHAP values
+        shap_values = explainer.shap_values(df)
         
         if isinstance(shap_values, list):
             shap_vals = shap_values[0][0]
         else:
             shap_vals = shap_values[0]
         
-        base_val = float(explainer.expected_value) if hasattr(explainer, 'expected_value') else 0.0
-        if isinstance(base_val, np.ndarray):
-            base_val = float(base_val[0])
-        
-        # Get feature names after transformation
-        num_features = ['bed', 'bath', 'acre_lot', 'house_size', 'bed_bath_ratio', 'sqft_per_bed', 'total_rooms', 'is_sold']
-        cat_features = preprocessor.named_transformers_['cat'].get_feature_names_out(['state']).tolist()
-        all_features = num_features + cat_features
+        # Get base value
+        if hasattr(explainer, 'expected_value'):
+            if isinstance(explainer.expected_value, (list, np.ndarray)):
+                base_val = float(explainer.expected_value[0]) if len(explainer.expected_value) > 0 else float(explainer.expected_value)
+            else:
+                base_val = float(explainer.expected_value)
+        else:
+            base_val = 0.0
         
         return ExplanationResponse(
             price=float(prediction[0]),
             shap_values=[float(v) for v in shap_vals],
             base_value=base_val,
-            feature_names=all_features[:len(shap_vals)],
-            feature_values=[float(X_transformed[0][i]) for i in range(min(len(shap_vals), X_transformed.shape[1]))],
+            feature_names=list(df.columns),
+            feature_values=[float(df[col].iloc[0]) for col in df.columns],
             model_version=model_version or "unknown"
         )
     except Exception as e:
         logger.error(f"Explanation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/states")
-def get_states():
-    """Get list of supported states."""
-    states = [
-        "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
-        "Connecticut", "Delaware", "District of Columbia", "Florida", "Georgia",
-        "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
-        "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
-        "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
-        "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota",
-        "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
-        "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia",
-        "Washington", "West Virginia", "Wisconsin", "Wyoming", "Puerto Rico", "Virgin Islands"
-    ]
-    return {"states": states}
+@app.post("/batch_predict")
+def batch_predict(properties: List[PropertyInput]):
+    """Predict prices for multiple properties."""
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    results = []
+    for prop in properties:
+        try:
+            df = prepare_features(prop)
+            pred = model.predict(df)[0]
+            results.append({
+                "input": {
+                    "bed": prop.bed,
+                    "bath": prop.bath,
+                    "house_size": prop.house_size,
+                    "state": prop.state
+                },
+                "price": float(pred)
+            })
+        except Exception as e:
+            results.append({
+                "input": {"bed": prop.bed, "bath": prop.bath},
+                "error": str(e)
+            })
+    
+    return {"predictions": results, "model_version": model_version}
