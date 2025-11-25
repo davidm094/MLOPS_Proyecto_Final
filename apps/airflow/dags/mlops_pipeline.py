@@ -45,36 +45,48 @@ def ingest_data(**kwargs):
     return CURRENT_BATCH_KEY
 
 def check_drift(**kwargs):
-    ti = kwargs['ti']
-    current_key = ti.xcom_pull(task_ids='ingest_data')
-    logging.info(f"Loading current data from {current_key}")
-    current_df = load_raw_data(current_key)
-    
-    if current_df is None:
-        raise ValueError("Could not load current data from S3")
+    try:
+        ti = kwargs['ti']
+        current_key = ti.xcom_pull(task_ids='ingest_data')
+        logging.info(f"Loading current data from {current_key}")
+        current_df = load_raw_data(current_key)
+        
+        if current_df is None:
+            raise ValueError("Could not load current data from S3")
 
-    # Load reference data (previous batch or baseline)
-    reference_df = load_raw_data(REFERENCE_KEY)
-    
-    if reference_df is None:
-        logging.info("No reference data found in S3. Treating as initial run.")
-        # Save this as reference for next time
-        save_raw_data(current_df, REFERENCE_KEY)
-        return 'train_model'
-    
-    # Clean both for drift detection (to handle types)
-    current_clean = clean_data(current_df)
-    reference_clean = clean_data(reference_df)
+        # Load reference data (previous batch or baseline)
+        reference_df = load_raw_data(REFERENCE_KEY)
+        
+        if reference_df is None:
+            logging.info("No reference data found in S3. Treating as initial run.")
+            # Save this as reference for next time
+            save_raw_data(current_df, REFERENCE_KEY)
+            return 'train_model'
+        
+        # Clean both for drift detection (to handle types)
+        current_clean = clean_data(current_df)
+        reference_clean = clean_data(reference_df)
 
-    has_drift = detect_drift(reference_clean, current_clean)
-    
-    if has_drift:
-        logging.info("Drift detected! Proceeding to training.")
-        # Update reference? Maybe after successful training.
-        return 'train_model'
-    else:
-        logging.info("No drift detected. Skipping training.")
-        return 'end_pipeline'
+        has_drift = detect_drift(reference_clean, current_clean)
+        
+        if has_drift:
+            logging.info("Drift detected! Proceeding to training.")
+            # Update reference? Maybe after successful training.
+            return 'train_model'
+        else:
+            logging.info("No drift detected. Skipping training.")
+            return 'end_pipeline'
+    except Exception as e:
+        logging.error(f"Drift Check Failed: {e}")
+        try:
+            import time
+            with open("/tmp/drift_error.log", "w") as f:
+                f.write(str(e))
+            logging.info("Sleeping for 600 seconds for debugging...")
+            time.sleep(600)
+        except:
+            pass
+        raise
 
 def train_process(**kwargs):
     ti = kwargs['ti']
