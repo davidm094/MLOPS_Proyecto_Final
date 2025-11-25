@@ -1,10 +1,11 @@
 fastapi
-uvicorn
-mlflow
+uvicorn[standard]
+mlflow==2.9.2
 scikit-learn
 pandas
 shap
 boto3
 psycopg2-binary
 numpy
+joblib
 

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: davidm094/mlops-api:latest
+        image: davidm094/mlops-api:v2
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
@@ -29,8 +29,10 @@ spec:
           value: "any"
         - name: AWS_SECRET_ACCESS_KEY
           value: "any"
+        - name: S3_ENDPOINT
+          value: "http://seaweedfs-s3.mlops.svc:8333"
         - name: MLFLOW_S3_ENDPOINT_URL
-          value: "http://seaweedfs-s3:8333"
+          value: "http://seaweedfs-s3.mlops.svc:8333"
         livenessProbe:
           httpGet:
             path: /health

@@ -2,7 +2,7 @@ streamlit
 requests
 shap
 matplotlib
-mlflow
+mlflow==2.9.2
 pandas
 numpy
 

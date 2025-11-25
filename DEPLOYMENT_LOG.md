@@ -48,128 +48,220 @@
 
 #### Architecture Changes:
 1. **Cluster:** K3d (K3s in Docker) instead of bare-metal K3s
-2. **Networking:** LoadBalancer services (mapped by K3d to localhost) instead of MetalLB
+2. **Networking:** NodePort services mapped by K3d to localhost
 3. **Ingress:** Removed custom Traefik, using K3d's built-in Traefik
 4. **DNS:** Eliminated need for nip.io or custom DNS
 
-#### Implementation Steps:
+### Session: 2025-11-24
 
-##### Phase 1: Cluster Recreation
-- Created `scripts/create_cluster.sh`
-- K3d configuration:
-  - Ports mapped: 80, 443, 8080 (Airflow), 5000 (MLflow), 8501 (Streamlit)
-  - 1 server + 1 agent node
-  - Traefik enabled (K3d default)
-
-##### Phase 2: Service Exposure
-- Changed all services from ClusterIP to LoadBalancer
-- K3d automatically maps LoadBalancer IPs to localhost ports
-- Eliminated Ingress complexity for local development
-
-##### Phase 3: Complete Application Definitions
-- Created `apps/api/k8s/deployment.yaml`
-  - FastAPI service with health checks
-  - LoadBalancer on port 8000
-  - Environment variables for MLflow and S3
-
-- Created `apps/frontend/k8s/deployment.yaml`
-  - Streamlit service
-  - LoadBalancer on port 8501
-  - Environment variables for API and MLflow URLs
-
-- Updated `infra/argocd/applications/core-apps.yaml`
-  - Removed custom Traefik app
-  - Added `api` and `frontend` Argo CD applications
-  - Changed storageClass from "longhorn-single" to "local-path" (K3d default)
-
-##### Phase 4: Unified Deployment Script
-- Created `scripts/start_mlops.sh`
-  - Single command deployment
-  - Automated cluster creation
-  - Argo CD bootstrap
-  - Application deployment
-  - Health checks and wait conditions
-  - Display of access URLs and credentials
-
-##### Phase 5: Documentation
-- Completely rewrote `README.md`
-  - Quick start guide
-  - Architecture overview
-  - Service access URLs
-  - Troubleshooting section
-  - CI/CD pipeline documentation
-  - ML pipeline explanation
-
-#### Phase 6: Helm Compatibility Fixes (2025-11-23 22:30 UTC)
+#### Phase 6: Helm Compatibility Fixes
 - Applied upstream requirements for Airflow Helm chart when using Argo CD:
   - Disabled Helm hooks for `createUserJob` and `migrateDatabaseJob`
   - Added `argocd.argoproj.io/hook: Sync` annotation so migrations run during every sync
-- Updated MLflow Helm values to use structured `artifactRoot.s3` block (instead of plain string) and wired S3 endpoint/credentials according to chart schema
+- Updated MLflow Helm values to use structured `artifactRoot.s3` block
 - Cleaned Airflow `env` section to match chart expectations (array of name/value pairs)
-- Result: Argo CD can now render both charts without schema errors and complete the sync
 
-#### Phase 7: NodePort Exposure Strategy (2025-11-23 23:25 UTC)
-- Chart v1.10.0 no permite fijar `nodePort` dentro de `webserver.service`, lo que impedía el render de Argo CD.
-- Se movió la responsabilidad del NodePort a un manifiesto independiente (`infra/manifests/services/airflow-webserver-nodeport.yaml`) aplicado automáticamente desde `scripts/start_mlops.sh`.
-- El chart vuelve a crear un Service `ClusterIP` estándar y el Service personalizado reexpone el Webserver en `30443`.
+#### Phase 7: NodePort Exposure Strategy
+- Chart v1.10.0 no permite fijar `nodePort` dentro de `webserver.service`
+- Se movió la responsabilidad del NodePort a un manifiesto independiente
+- El chart vuelve a crear un Service `ClusterIP` estándar
 
-#### Phase 8: Airflow PostgreSQL Image Override (2025-11-23 23:40 UTC)
-- El subchart `postgresql` de Airflow intentaba descargar `bitnami/postgresql`, lo que fallaba en la red del entorno (ImagePullBackOff) y dejaba los jobs de migración en CrashLoop.
-- Se forzó al subchart a usar `docker.io/library/postgres:13-alpine`, con credenciales/DB específicas para Airflow y persistencia deshabilitada.
-- Con esta imagen pública, el Postgres embebido del chart puede arrancar y los jobs `create-user`/`run-airflow-migrations` completan correctamente.
+#### Phase 8: Airflow PostgreSQL Image Override
+- El subchart `postgresql` de Airflow intentaba descargar `bitnami/postgresql` (ImagePullBackOff)
+- Se forzó al subchart a usar `docker.io/library/postgres:13-alpine`
 
-#### Phase 9: Service Selector Fixes (2025-11-23 23:55 UTC)
-- El servicio NodePort de Airflow (`airflow-webserver-nodeport`) no encontraba endpoints.
-- Causa: Selectors incorrectos (`app.kubernetes.io/name`) vs Labels reales del chart legacy (`component=webserver`, `release=airflow`).
-- Solución: Se corrigió el manifiesto del servicio para usar los labels correctos.
-- **Resultado Final:** Acceso exitoso a Airflow UI en `http://localhost:30443`.
+#### Phase 9: Service Selector Fixes
+- El servicio NodePort de Airflow no encontraba endpoints
+- Causa: Selectors incorrectos vs Labels reales del chart legacy
+- Solución: Se corrigió el manifiesto del servicio para usar los labels correctos
 
-#### Phase 10: Image Update & Sync Policy (2025-11-23 23:59 UTC)
-- **Issue:** Airflow pods stuck on `apache/airflow:2.6.2` despite manual updates.
-- **Cause:** Argo CD "Self-Heal" reverted manual `kubectl set image` changes to the state defined in Git (which defaulted to chart values).
-- **Diagnosis:** Used `References/K8S_updates.md` to identify Strategy 2 (Mutable Tags with `imagePullPolicy: Always`) as the appropriate fix for the current phase.
-- **Fix:**
-  1. Updated `infra/argocd/applications/core-apps.yaml` to explicitly define `images.airflow` with `repository: davidm094/mlops-airflow`, `tag: v1`, and `pullPolicy: Always`.
-  2. Removed redundant/conflicting image configurations in `core-apps.yaml` to ensure clean Helm rendering.
-  3. Pushed changes to Git so Argo CD could sync the correct desired state.
-  4. Performed Hard Refresh and Sync in Argo CD.
-- **Result:** Argo CD successfully applied the custom image `v1`. Pods restarted and pulled the new image containing necessary ML libraries (`scikit-learn`).
+#### Phase 10: Image Update & Sync Policy
+- **Issue:** Airflow pods stuck on `apache/airflow:2.6.2` despite manual updates
+- **Cause:** Argo CD "Self-Heal" reverted manual changes
+- **Fix:** Updated `core-apps.yaml` to explicitly define custom image with `pullPolicy: Always`
 
-### Current Status
-**All components ready and accessible:**
+---
 
-✅ Cluster creation script (`create_cluster.sh`)
-✅ Unified deployment script (`start_mlops.sh`)
-✅ Kubernetes manifests for API and Frontend
-✅ Updated Argo CD applications (all 8 apps defined)
-✅ Comprehensive documentation
-✅ LoadBalancer-based networking (no Ingress complexity)
-✅ **Airflow Image Sync:** Fixed and verified.
+## Session: 2025-11-25
 
-### Access URLs (Post-Deployment)
-- Argo CD: http://localhost:30080 (admin / password del secret)
-- Airflow: http://localhost:30443 (admin / admin)
-- MLflow: http://localhost:30500
-- API: http://localhost:30800
-- Frontend: http://localhost:30501
+### Phase 11: DAG Execution & Data Pipeline Testing
+**Timestamp:** 03:00 UTC
 
-### Lessons Learned
-1. **Network Restrictions:** Corporate/university networks can severely limit bare-metal K8s deployments
-2. **MetalLB Complexity:** For single-node clusters, LoadBalancer via K3d is simpler than MetalLB
-3. **Image Availability:** Always verify image accessibility before deployment (MinIO Docker Hub changes)
-4. **Local Development:** K3d provides excellent local K8s experience with minimal overhead
-5. **GitOps Challenges:** Argo CD sync requires proper repo access and can cache aggressively
-6. **Helm Legacy:** Older charts (Airflow 1.10) use non-standard labels and service definitions, requiring manual overrides.
-7. **GitOps vs Manual:** Never mix `kubectl` manual changes with Argo CD automated syncs; they will fight. Always update Git.
+#### Issue: DAG Tasks Failing Silently
+- Worker pods created by KubernetesExecutor were deleted immediately after completion
+- Logs not accessible via Airflow UI ("Could not read served logs")
+- **Root Cause:** Ephemeral pods + no remote logging configured
 
-### Next Steps (User Actions Required)
-1. Verify ML pipeline execution end-to-end
-2. Validate SHAP explanations in Frontend
+#### Fixes Applied:
+1. Added `AIRFLOW__KUBERNETES__DELETE_WORKER_PODS: "False"` to keep pods for debugging
+2. Added `time.sleep(600)` in task code to keep failing pods alive
+3. Added error logging to `/tmp/*.log` files for inspection via `kubectl exec`
 
-### Technical Debt / Future Improvements
-- [ ] Add proper TLS certificates (currently using Traefik default)
-- [ ] Implement proper secrets management (currently hardcoded)
+### Phase 12: S3 Data Exchange Between Tasks
+**Timestamp:** 03:15 UTC
+
+#### Issue: `FileNotFoundError` in `check_drift` Task
+- `ingest_data` saved file locally, but `check_drift` ran in different pod
+- Local filesystem not shared between task pods
+
+#### Solution:
+- Refactored `data_loader.py` to use S3 (SeaweedFS) for all data storage
+- Added `save_raw_data()` and `load_raw_data()` functions using `boto3`
+- Modified DAG to pass S3 keys via XCom instead of file paths
+
+### Phase 13: API Integration Fix
+**Timestamp:** 03:20 UTC
+
+#### Issue: `400 Bad Request` from External Data API
+- API expected query parameters (`?group_number=5&day=Tuesday`)
+- Code was using path parameters or incorrect format
+
+#### Solution:
+- Updated `fetch_data()` to use `requests.get(url, params={...})`
+- Added proper parameter extraction from Airflow context
+
+### Phase 14: Corrupted Reference Data
+**Timestamp:** 03:25 UTC
+
+#### Issue: `KeyError: ['price']` in `clean_data()`
+- `reference.csv` in S3 had old nested format (columns: `group_number`, `day`, `batch_number`, `data`)
+- Was saved before the API response parsing fix
+
+#### Solution:
+- Deleted corrupted `reference.csv` from S3
+- Re-ran DAG to regenerate with correct format
+
+### Phase 15: MLflow Version Incompatibility ⭐
+**Timestamp:** 03:45 UTC
+
+#### Issue: `MlflowException: API request to /api/2.0/mlflow/logged-models failed with 404`
+- Training completed but model logging failed
+- Scheduler marked tasks as "zombie"
+
+#### Root Cause:
+| Component | Version |
+|-----------|---------|
+| MLflow Client (Airflow) | **3.6.0** |
+| MLflow Server | **1.28.0** |
+
+MLflow 3.x client uses new APIs not available in 1.28.0 server.
+
+#### Solution:
+1. Pinned `mlflow==2.9.2` in `apps/airflow/requirements.txt`
+2. Built new Docker image `davidm094/mlops-airflow:v2`
+3. Updated `core-apps.yaml` to use `v2` tag
+4. Recreated `airflow-fernet-key` secret (lost during pod restart)
+5. Force-deleted and re-created Airflow Argo CD application
+
+#### Verification:
+```bash
+kubectl exec -n mlops $SCHEDULER_POD -c scheduler -- python3 -c "import mlflow; print(mlflow.__version__)"
+# Output: 2.9.2
+```
+
+### Phase 16: Full Pipeline Test ✅
+**Timestamp:** 03:59 UTC
+
+#### Successful End-to-End Test:
+```
+1. Loading data...     ✅ 361,457 rows from S3
+2. Cleaning...         ✅ Features prepared
+3. Training...         ✅ RandomForest (n=50, depth=10)
+   RMSE: 1,448,040
+4. SHAP...             ✅ TreeExplainer generated
+5. MLflow...           ✅ Run ID: d5da15bba06041fcab761bb3335e96bc
+```
+
+#### Artifacts Saved to S3:
+- `mlflow-artifacts/2/{run_id}/artifacts/model/model.pkl` (4.2 MB)
+- `mlflow-artifacts/2/{run_id}/artifacts/explainer.pkl` (5.8 MB)
+
+### Phase 17: API & Frontend SHAP Integration
+**Timestamp:** 04:00 UTC
+
+#### Changes Made:
+1. **API (`apps/api/src/main.py`):**
+   - Loads model and SHAP explainer directly from S3/MLflow artifacts
+   - `/predict` endpoint returns price prediction
+   - `/explain` endpoint returns SHAP values, base value, feature names
+   - `/reload` endpoint to refresh model without restart
+   - `/health` endpoint for monitoring
+
+2. **Frontend (`apps/frontend/src/app.py`):**
+   - Three tabs: Predict, SHAP Explanation, Model Info
+   - Interactive SHAP waterfall chart using matplotlib
+   - Feature contribution breakdown table
+   - Quick insights (price per sqft, per bedroom, per acre)
+   - System status sidebar with reload button
+
+3. **Dependencies:**
+   - Pinned `mlflow==2.9.2` in both API and Frontend requirements
+   - Added `joblib` to API requirements
+
+---
+
+## Current Status
+
+### ✅ Completed Components:
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| K3d Cluster | ✅ Running | 1 server + 1 agent |
+| Argo CD | ✅ Deployed | GitOps management |
+| PostgreSQL | ✅ Running | Metadata for Airflow & MLflow |
+| SeaweedFS | ✅ Running | S3-compatible storage |
+| Airflow | ✅ Running | v2 image with mlflow==2.9.2 |
+| MLflow | ✅ Running | Experiment tracking |
+| API (FastAPI) | ✅ Deployed | Prediction & SHAP endpoints |
+| Frontend (Streamlit) | ✅ Deployed | Interactive UI |
+
+### ✅ ML Pipeline Status:
+
+| Step | Status | Details |
+|------|--------|---------|
+| Data Ingestion | ✅ | API → S3 (361k rows) |
+| Data Cleaning | ✅ | Handles missing values |
+| Drift Detection | ✅ | KS-test on numerical features |
+| Model Training | ✅ | RandomForest, logged to MLflow |
+| SHAP Explainer | ✅ | TreeExplainer saved as artifact |
+| Model Serving | ✅ | FastAPI loads from S3 |
+| Interpretability | ✅ | SHAP waterfall in Streamlit |
+
+### Access URLs:
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Argo CD | http://localhost:30443 | admin / (from secret) |
+| Airflow | http://localhost:30080 | admin / admin |
+| MLflow | http://localhost:30500 | - |
+| API | http://localhost:30800 | - |
+| Frontend | http://localhost:30501 | - |
+
+---
+
+## Lessons Learned
+
+1. **MLflow Version Compatibility:** Always match client and server versions. Major version differences (3.x vs 1.x) cause API incompatibilities.
+
+2. **KubernetesExecutor Debugging:** Worker pods are ephemeral. Use `DELETE_WORKER_PODS=False` and `time.sleep()` for debugging.
+
+3. **S3 for Inter-Task Data:** In KubernetesExecutor, tasks run in separate pods. Use S3/external storage for data exchange, not local files.
+
+4. **Argo CD Self-Heal:** Don't mix manual `kubectl` changes with GitOps. Always update Git and let Argo CD sync.
+
+5. **Helm Chart Quirks:** Older charts (Airflow 1.10) have non-standard configurations. Read the chart source code when docs are unclear.
+
+6. **External API Limits:** The data source API has usage limits. Cache data in S3 for repeated experiments.
+
+---
+
+## Technical Debt / Future Improvements
+
+- [ ] Add proper TLS certificates
+- [ ] Implement secrets management (Vault/Sealed Secrets)
 - [ ] Add resource limits/requests to all deployments
-- [ ] Implement proper backup strategy for Postgres and SeaweedFS
+- [ ] Implement backup strategy for Postgres and SeaweedFS
 - [ ] Add Prometheus/Grafana for observability
-- [ ] Implement proper authentication for Airflow/MLflow
+- [ ] Implement proper authentication for all services
+- [ ] Upgrade MLflow server to 2.x for better compatibility
+- [ ] Add model versioning and A/B testing support
+- [ ] Implement automated retraining triggers

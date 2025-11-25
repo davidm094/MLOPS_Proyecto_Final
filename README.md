@@ -4,16 +4,34 @@ Este repositorio contiene la implementación completa de una plataforma MLOps En
 
 ## 🏗 Arquitectura
 
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              K3d Cluster                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │   Argo CD   │  │   Airflow   │  │   MLflow    │  │  SeaweedFS  │        │
+│  │  (GitOps)   │  │ (Pipelines) │  │ (Tracking)  │  │    (S3)     │        │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘        │
+│         │                │                │                │                │
+│         └────────────────┴────────────────┴────────────────┘                │
+│                                   │                                          │
+│  ┌─────────────┐  ┌─────────────┐│  ┌─────────────┐                        │
+│  │   FastAPI   │  │  Streamlit  ││  │ PostgreSQL  │                        │
+│  │    (API)    │  │ (Frontend)  ││  │  (Metadata) │                        │
+│  └─────────────┘  └─────────────┘│  └─────────────┘                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ### Infraestructura
-- **Kubernetes:** K3d (K3s en Docker) - Ideal para desarrollo local en WSL/Linux/macOS
-- **GitOps:** Argo CD (Continuous Deployment)
+- **Kubernetes:** K3d (K3s en Docker) - Ideal para desarrollo local
+- **GitOps:** Argo CD (Continuous Deployment desde Git)
 - **Storage:** SeaweedFS (S3-compatible) + PostgreSQL
-- **Networking:** Traefik (integrado con K3d) + LoadBalancer Services
+- **Networking:** NodePort Services
 
 ### Componentes MLOps
 - **Orquestación:** Apache Airflow con KubernetesExecutor y Git-Sync
 - **Experiment Tracking:** MLflow (Backend: Postgres, Artifacts: SeaweedFS S3)
-- **Model Serving:** FastAPI con endpoints de predicción y explicabilidad (SHAP)
+- **Model Serving:** FastAPI con endpoints de predicción y explicabilidad
+- **Interpretabilidad:** SHAP TreeExplainer para explicaciones de predicciones
 - **Frontend:** Streamlit con visualizaciones interactivas
 - **CI/CD:** GitHub Actions para build y push de imágenes Docker
 
@@ -22,10 +40,11 @@ Este repositorio contiene la implementación completa de una plataforma MLOps En
 ### Prerequisitos
 - Docker Desktop (Windows/macOS) o Docker Engine (Linux)
 - WSL2 (si estás en Windows)
+- kubectl instalado
 - 8GB RAM mínimo, 16GB recomendado
 - 20GB de espacio en disco
 
-### Despliegue Automatizado (Un Solo Comando)
+### Despliegue Automatizado
 
 ```bash
 # 1. Clonar el repositorio
@@ -39,36 +58,99 @@ chmod +x scripts/*.sh
 ./scripts/start_mlops.sh
 ```
 
+**Tiempo estimado:** 5-7 minutos
+
 Este script:
-1. ✅ Crea un cluster K3d con configuración optimizada
+1. ✅ Crea un cluster K3d con puertos mapeados
 2. ✅ Instala y configura Argo CD
 3. ✅ Despliega toda la infraestructura (Postgres, SeaweedFS)
 4. ✅ Despliega las aplicaciones MLOps (Airflow, MLflow, API, Frontend)
-5. ✅ Muestra las URLs de acceso y credenciales
-
-**Tiempo estimado:** 5-7 minutos
-
-> **Nota Airflow + Argo CD:** El chart oficial requiere deshabilitar los hooks de `createUserJob` y `migrateDatabaseJob` y marcar la migración con `argocd.argoproj.io/hook: Sync` para que las migraciones se ejecuten en cada sincronización. Esta configuración ya está aplicada en `infra/argocd/applications/core-apps.yaml` siguiendo la guía oficial.[^airflow-helm]
->
-> Adicionalmente forzamos al subchart de PostgreSQL de Airflow a usar la imagen pública `library/postgres:13-alpine`, evitando los `ImagePullBackOff` que provoca la imagen de Bitnami en entornos restringidos.
+5. ✅ Crea buckets S3 necesarios
+6. ✅ Muestra las URLs de acceso y credenciales
 
 ## 🌐 Acceso a Servicios
 
-Una vez completado el despliegue, los servicios están disponibles en:
-
 | Servicio | URL | Credenciales |
 |----------|-----|--------------|
-| **Argo CD** | http://localhost:30080 | admin / (ver output del script) |
-| **Airflow** | http://localhost:30443 | admin / admin |
+| **Argo CD** | http://localhost:30443 | admin / (ver comando abajo) |
+| **Airflow** | http://localhost:30080 | admin / admin |
 | **MLflow** | http://localhost:30500 | - |
 | **API (FastAPI)** | http://localhost:30800 | - |
 | **Frontend (Streamlit)** | http://localhost:30501 | - |
 
-> Airflow expone su UI mediante un `Service` tipo NodePort (`infra/manifests/services/airflow-webserver-nodeport.yaml`), aplicado automáticamente por `start_mlops.sh`.
-
 ### Obtener Password de Argo CD
 ```bash
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d && echo
+```
+
+## 🤖 Pipeline de Machine Learning
+
+### Flujo del DAG
+```
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│    start     │───▶│ ingest_data  │───▶│ check_drift  │───▶│ train_model  │
+└──────────────┘    └──────────────┘    └──────────────┘    └──────┬───────┘
+                                               │                    │
+                                               │ (no drift)         │
+                                               ▼                    ▼
+                                        ┌──────────────┐    ┌──────────────┐
+                                        │ end_pipeline │◀───│ end_pipeline │
+                                        └──────────────┘    └──────────────┘
+```
+
+### Descripción de Tareas
+
+| Tarea | Descripción |
+|-------|-------------|
+| `ingest_data` | Descarga datos de API externa, guarda en S3 |
+| `check_drift` | Compara datos actuales vs referencia (KS-test) |
+| `train_model` | Entrena RandomForest, registra en MLflow con SHAP |
+| `end_pipeline` | Marca finalización del pipeline |
+
+### Modelo y Features
+
+- **Algoritmo:** Random Forest Regressor
+- **Target:** Precio de propiedades inmobiliarias
+- **Features utilizadas:**
+  - `bed` - Número de habitaciones
+  - `bath` - Número de baños
+  - `acre_lot` - Tamaño del lote (acres)
+  - `house_size` - Tamaño de la casa (sqft)
+
+### Métricas Registradas
+- **RMSE:** Root Mean Squared Error (~$1.4M)
+- **R²:** Coeficiente de determinación
+
+## 🔍 Explicabilidad con SHAP
+
+### ¿Qué es SHAP?
+SHAP (SHapley Additive exPlanations) es una técnica que explica las predicciones de modelos ML asignando a cada feature un valor de importancia para cada predicción individual.
+
+### Implementación
+
+1. **Durante el entrenamiento:**
+   - Se genera un `TreeExplainer` para el modelo RandomForest
+   - Se guarda como artefacto `explainer.pkl` en MLflow/S3
+
+2. **En la API (`/explain`):**
+   - Carga el explainer desde S3
+   - Calcula SHAP values para la entrada
+   - Retorna valores, base value y nombres de features
+
+3. **En el Frontend:**
+   - Visualiza un gráfico de barras con contribuciones
+   - Muestra tabla detallada de impacto por feature
+   - Indica dirección del impacto (aumenta/disminuye precio)
+
+### Ejemplo de Respuesta `/explain`
+```json
+{
+  "price": 350000.0,
+  "shap_values": [15000.5, -8000.2, 5000.0, 25000.8],
+  "base_value": 312999.9,
+  "feature_names": ["bed", "bath", "acre_lot", "house_size"],
+  "feature_values": [3.0, 2.0, 0.25, 1800.0]
+}
 ```
 
 ## 📂 Estructura del Proyecto
@@ -77,240 +159,191 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 .
 ├── apps/
 │   ├── airflow/
-│   │   ├── dags/                 # DAGs de Airflow (sincronizados vía Git-Sync)
-│   │   │   └── src/              # Scripts de ML (training, drift, preprocessing)
-│   │   ├── Dockerfile            # Imagen custom de Airflow
+│   │   ├── dags/                 # DAGs de Airflow
+│   │   │   ├── mlops_pipeline.py # DAG principal
+│   │   │   └── src/              # Scripts de ML
+│   │   │       ├── data_loader.py
+│   │   │       ├── preprocessing.py
+│   │   │       ├── drift_detection.py
+│   │   │       └── model_training.py
+│   │   ├── Dockerfile
 │   │   └── requirements.txt
 │   ├── api/
-│   │   ├── src/                  # FastAPI application
-│   │   ├── k8s/                  # Manifiestos de Kubernetes
+│   │   ├── src/main.py           # FastAPI con /predict y /explain
+│   │   ├── k8s/deployment.yaml
 │   │   ├── Dockerfile
 │   │   └── requirements.txt
 │   └── frontend/
-│       ├── src/                  # Streamlit application
-│       ├── k8s/                  # Manifiestos de Kubernetes
+│       ├── src/app.py            # Streamlit con SHAP visualization
+│       ├── k8s/deployment.yaml
 │       ├── Dockerfile
 │       └── requirements.txt
 ├── infra/
 │   ├── argocd/
-│   │   ├── applications/         # Definiciones de Apps de Argo CD
-│   │   └── install/              # Manifiestos de instalación de Argo CD
-│   ├── charts/                   # Helm values (deprecado, ahora inline)
+│   │   ├── applications/
+│   │   │   └── core-apps.yaml    # Todas las aplicaciones Argo CD
+│   │   └── install/
+│   │       └── install.yaml      # Manifiestos de Argo CD
 │   └── manifests/
-│       ├── ingress/              # Reglas de Ingress (deprecado en local)
-│       └── setup/                # Jobs de inicialización (buckets S3)
+│       ├── services/             # NodePort services
+│       └── setup/                # Jobs de inicialización
 ├── scripts/
-│   ├── start_mlops.sh            # 🚀 Script principal de despliegue
-│   ├── create_cluster.sh         # Creación del cluster K3d
-│   ├── bootstrap_argocd.sh       # Instalación de Argo CD
-│   └── setup_host.sh             # Setup para VM (deprecado en local)
+│   ├── start_mlops.sh            # 🚀 Script principal
+│   ├── create_cluster.sh
+│   └── bootstrap_argocd.sh
+├── DEPLOYMENT_LOG.md             # Bitácora detallada
 └── README.md
 ```
 
-## 🤖 Pipeline de Machine Learning
+## 🧪 Testing del Pipeline
 
-### Flujo Completo
-1. **Ingesta de Datos:** Obtención desde API externa (`http://10.43.100.103:8000`)
-2. **Detección de Drift:** Kolmogorov-Smirnov test en features numéricas
-3. **Entrenamiento Condicional:** Se ejecuta solo si hay drift detectado
-4. **Registro en MLflow:** Modelo, métricas (RMSE, R²) y artefacto SHAP
-5. **Promoción a Producción:** Tag "Production" en MLflow Model Registry
+### 1. Ejecutar el DAG manualmente
 
-### Modelo y Features
-- **Algoritmo:** Random Forest Regressor
-- **Target:** Precio de propiedades
-- **Features:** Superficie, habitaciones, baños, ubicación, etc.
-- **Explicabilidad:** SHAP TreeExplainer registrado como artefacto
-
-### DAG de Airflow
-```
-ingest_data → check_drift → [train_model | skip_training]
+```bash
+# Trigger desde CLI
+kubectl exec -n mlops $(kubectl get pods -n mlops -l component=scheduler -o jsonpath="{.items[0].metadata.name}") \
+  -c scheduler -- airflow dags trigger mlops_full_pipeline
 ```
 
-## 🔍 Explicabilidad con SHAP
+O desde la UI de Airflow: http://localhost:30080
 
-### Endpoints de la API
-- `POST /predict`: Predicción de precio
-- `POST /explain`: Valores SHAP para interpretabilidad
-- `GET /health`: Health check
+### 2. Probar la API
 
-### Visualización en Streamlit
-- Formulario interactivo de entrada
-- Predicción en tiempo real
-- Gráficos SHAP (bar plot con contribución de features)
-- Historial de experimentos de MLflow
+```bash
+# Predicción
+curl -X POST http://localhost:30800/predict \
+  -H "Content-Type: application/json" \
+  -d '{"bed": 3, "bath": 2, "acre_lot": 0.25, "house_size": 1800}'
+
+# Explicación SHAP
+curl -X POST http://localhost:30800/explain \
+  -H "Content-Type: application/json" \
+  -d '{"bed": 3, "bath": 2, "acre_lot": 0.25, "house_size": 1800}'
+
+# Health check
+curl http://localhost:30800/health
+
+# Recargar modelo
+curl -X POST http://localhost:30800/reload
+```
+
+### 3. Usar el Frontend
+
+1. Acceder a http://localhost:30501
+2. Tab "Predict Price": Llenar formulario y obtener predicción
+3. Tab "SHAP Explanation": Ver contribución de cada feature
+4. Tab "Model Info": Ver estado del modelo y métricas
 
 ## 🛠 Comandos Útiles
 
 ### Gestión del Cluster
 ```bash
-# Ver estado de todos los pods
+# Ver todos los pods
 kubectl get pods -A
 
-# Ver servicios en el namespace mlops
-kubectl get svc -n mlops
-
-# Ver estado de las aplicaciones en Argo CD
+# Ver aplicaciones de Argo CD
 kubectl get apps -n argocd
 
-# Ver logs de Airflow
-kubectl logs -n mlops -l component=webserver -f
+# Logs del scheduler de Airflow
+kubectl logs -n mlops -l component=scheduler -c scheduler -f
 
-# Ver logs de MLflow
+# Logs de MLflow
 kubectl logs -n mlops -l app.kubernetes.io/name=mlflow -f
 
-# Detener el cluster (conserva datos)
+# Detener cluster (conserva datos)
 k3d cluster stop mlops-cluster
 
-# Reiniciar el cluster
-k3d cluster start mlops-cluster
-
-# Eliminar el cluster completamente
+# Eliminar cluster
 k3d cluster delete mlops-cluster
 ```
 
 ### Debugging
 ```bash
-# Ejecutar shell en un pod
+# Shell en un pod
 kubectl exec -it <pod-name> -n mlops -- /bin/bash
 
-# Ver eventos del cluster
-kubectl get events -n mlops --sort-by='.lastTimestamp'
+# Ver eventos recientes
+kubectl get events -n mlops --sort-by='.lastTimestamp' | tail -20
 
-# Describir un recurso
+# Describir pod problemático
 kubectl describe pod <pod-name> -n mlops
+
+# Ver datos en S3
+kubectl exec -n mlops <scheduler-pod> -c scheduler -- python3 -c "
+import boto3
+s3 = boto3.client('s3', endpoint_url='http://seaweedfs-s3.mlops.svc:8333', 
+                  aws_access_key_id='any', aws_secret_access_key='any')
+for bucket in s3.list_buckets()['Buckets']:
+    print(bucket['Name'])
+"
 ```
 
 ## 🔄 CI/CD Pipeline
 
 ### GitHub Actions
-El workflow `.github/workflows/ci.yaml` se ejecuta automáticamente en cada push a `main`:
+El workflow `.github/workflows/ci.yaml` se ejecuta en cada push a `main`:
 
 1. Build de imágenes Docker (airflow, api, frontend)
 2. Tag con `github.sha` y `latest`
 3. Push a Docker Hub
 
 ### Configuración de Secretos
-En GitHub → Settings → Secrets and variables → Actions:
-- `DOCKERHUB_USERNAME`: Tu usuario de Docker Hub
-- `DOCKERHUB_TOKEN`: Token de acceso (no password)
+En GitHub → Settings → Secrets:
+- `DOCKERHUB_USERNAME`: Usuario de Docker Hub
+- `DOCKERHUB_TOKEN`: Token de acceso
 
 ### Actualización de Imágenes
-Argo CD sincroniza automáticamente cada 3 minutos. Para forzar actualización:
 ```bash
+# Forzar actualización de deployments
 kubectl rollout restart deployment/api -n mlops
 kubectl rollout restart deployment/frontend -n mlops
 ```
 
-## 📊 Monitoreo y Observabilidad
-
-### Métricas en MLflow
-- RMSE (Root Mean Squared Error)
-- R² Score
-- Historial de experimentos con comparación visual
-
-### Logs de Airflow
-Accesibles desde la UI de Airflow (`http://localhost:8080`) en cada tarea del DAG.
-
-### Estado de Sincronización
-Argo CD UI (`https://localhost`) muestra el estado de salud y sincronización de todas las aplicaciones en tiempo real.
-
-## 🧪 Testing del Pipeline
-
-### 1. Activar el DAG en Airflow
-```
-1. Acceder a http://localhost:8080
-2. Login: admin / admin
-3. Activar el DAG "mlops_full_pipeline"
-4. Trigger manual: botón "▶️" (Play)
-```
-
-### 2. Verificar Ejecución
-- Ver logs en cada tarea del DAG
-- Confirmar que `train_model` se ejecuta si hay drift
-- Verificar registro en MLflow
-
-### 3. Probar la API
-```bash
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{
-    "MedInc": 3.5,
-    "HouseAge": 15.0,
-    "AveRooms": 5.0,
-    "AveBedrms": 1.2,
-    "Population": 1000.0,
-    "AveOccup": 3.0,
-    "Latitude": 34.0,
-    "Longitude": -118.0
-  }'
-```
-
-### 4. Usar el Frontend
-```
-1. Acceder a http://localhost:8501
-2. Llenar el formulario con valores de prueba
-3. Ver predicción y gráficos SHAP
-```
-
 ## 🐛 Troubleshooting
 
-### El cluster no arranca
+### Pods en CrashLoopBackOff
 ```bash
-# Verificar Docker
-docker ps
-
-# Recrear el cluster
-k3d cluster delete mlops-cluster
-./scripts/start_mlops.sh
-```
-
-### Los pods están en CrashLoopBackOff
-```bash
-# Ver logs del pod problemático
-kubectl logs <pod-name> -n mlops
-
-# Verificar eventos
-kubectl get events -n mlops --sort-by='.lastTimestamp'
+kubectl logs <pod-name> -n mlops --previous
+kubectl describe pod <pod-name> -n mlops
 ```
 
 ### Argo CD no sincroniza
 ```bash
-# Forzar sincronización desde CLI
-kubectl patch application <app-name> -n argocd --type merge -p '{"operation": {"sync": {"prune": true}}}'
-
-# O desde la UI: botón "SYNC" en cada aplicación
+# Hard refresh
+kubectl delete application <app-name> -n argocd
+kubectl apply -f infra/argocd/applications/core-apps.yaml
 ```
 
-### Imágenes no se descargan
+### MLflow no guarda artefactos
 ```bash
-# Verificar conectividad a Docker Hub
-docker pull davidm094/mlops-api:latest
-
-# Si falla, verificar credenciales en GitHub Actions
+# Verificar buckets S3
+kubectl exec -n mlops <scheduler-pod> -c scheduler -- python3 -c "
+import boto3
+s3 = boto3.client('s3', endpoint_url='http://seaweedfs-s3.mlops.svc:8333',
+                  aws_access_key_id='any', aws_secret_access_key='any')
+print([b['Name'] for b in s3.list_buckets()['Buckets']])
+"
+# Debe mostrar: ['airflow-logs', 'data-raw', 'mlflow-artifacts']
 ```
 
-### Actualización de Imágenes (Airflow/API)
-Este proyecto utiliza la estrategia de **Tags Mutables** (`:v1`, `:latest`) con `imagePullPolicy: Always`.
-Para actualizar una imagen sin cambiar el tag:
-
-1. Push de la nueva imagen a DockerHub.
-2. Reiniciar los pods para forzar la descarga:
+### API no carga modelo
 ```bash
-kubectl rollout restart deployment/airflow-scheduler -n mlops
-kubectl rollout restart deployment/airflow-webserver -n mlops
+# Verificar que hay artefactos
+curl http://localhost:30800/health
+
+# Forzar recarga
+curl -X POST http://localhost:30800/reload
 ```
 
 ## 📚 Referencias
 
-- [Documentación de K3d](https://k3d.io/)
+- [K3d Documentation](https://k3d.io/)
 - [Argo CD Documentation](https://argo-cd.readthedocs.io/)
 - [Apache Airflow](https://airflow.apache.org/)
 - [MLflow](https://mlflow.org/)
-- [SHAP (SHapley Additive exPlanations)](https://shap.readthedocs.io/)
-- [Helm Chart for Apache Airflow](https://airflow.apache.org/docs/helm-chart/stable/index.html)[^airflow-helm]
-
-[^airflow-helm]: Sección “Installing the Chart with Argo CD, Flux, Rancher or Terraform” de la documentación oficial del chart de Airflow.
+- [SHAP Documentation](https://shap.readthedocs.io/)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Streamlit](https://streamlit.io/)
 
 ## 👥 Autor
 
