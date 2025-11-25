@@ -351,19 +351,13 @@ def prepare_features(input_data: PropertyInput) -> pd.DataFrame:
 # ============================================
 # ENDPOINTS
 # ============================================
-@app.get("/")
-def root():
-    return {
-        "service": "Real Estate Price Prediction API",
-        "version": "5.0",
-        "model_name": MODEL_NAME,
-        "model_version": model_version,
-        "model_stage": model_stage,
-        "model_run_id": model_run_id,
-        "model_loaded": model is not None,
-        "explainer_loaded": explainer is not None,
-        "features": feature_names
-    }
+# Health check endpoints defined first to ensure they're always available
+@app.get("/ready", include_in_schema=False)
+def ready():
+    """Readiness probe - returns 200 only if model is loaded."""
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    return {"status": "ready"}
 
 @app.get("/health", response_model=HealthResponse, include_in_schema=False)
 def health():
@@ -384,12 +378,20 @@ def health():
         database_connected=db_connected
     )
 
-@app.get("/ready", include_in_schema=False)
-def ready():
-    """Readiness probe - returns 200 only if model is loaded."""
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    return {"status": "ready"}
+@app.get("/")
+def root():
+    return {
+        "service": "Real Estate Price Prediction API",
+        "version": "5.0",
+        "model_name": MODEL_NAME,
+        "model_version": model_version,
+        "model_stage": model_stage,
+        "model_run_id": model_run_id,
+        "model_loaded": model is not None,
+        "explainer_loaded": explainer is not None,
+        "features": feature_names
+    }
+
 
 @app.get("/model", response_model=ModelInfo)
 def get_model_info():
