@@ -18,7 +18,7 @@ USER airflow
 
 # Copy and install Python dependencies
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --user -r /tmp/requirements.txt && \
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
 # Set environment variables
