@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 USER airflow
 
 # Copy and install Python dependencies
-COPY requirements.txt /tmp/requirements.txt
+COPY --chown=airflow:root requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
