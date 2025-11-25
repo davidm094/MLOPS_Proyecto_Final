@@ -1,0 +1,153 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-data-tables
+  namespace: mlops
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: init-tables
+        image: postgres:13-alpine
+        env:
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: POSTGRES_HOST
+        - name: PGPORT
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: POSTGRES_PORT
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: POSTGRES_USER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: POSTGRES_PASSWORD
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Creating MLOps data tables..."
+          
+          # Create mlops database if not exists
+          psql -h $PGHOST -U $PGUSER -d postgres -c "CREATE DATABASE mlops_data;" 2>/dev/null || echo "Database mlops_data already exists"
+          
+          # Create tables in mlops_data database
+          psql -h $PGHOST -U $PGUSER -d mlops_data << 'EOF'
+          
+          -- RAW_DATA: Datos crudos de la API externa
+          CREATE TABLE IF NOT EXISTS raw_data (
+              id SERIAL PRIMARY KEY,
+              brokered_by VARCHAR(255),
+              status VARCHAR(50),
+              price DECIMAL(15, 2),
+              bed DECIMAL(5, 1),
+              bath DECIMAL(5, 1),
+              acre_lot DECIMAL(10, 4),
+              street VARCHAR(500),
+              city VARCHAR(255),
+              state VARCHAR(100),
+              zip_code VARCHAR(20),
+              house_size DECIMAL(10, 2),
+              prev_sold_date VARCHAR(50),
+              ingestion_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              batch_id VARCHAR(100)
+          );
+          
+          -- CLEAN_DATA: Datos procesados para entrenamiento
+          CREATE TABLE IF NOT EXISTS clean_data (
+              id SERIAL PRIMARY KEY,
+              bed DECIMAL(5, 1),
+              bath DECIMAL(5, 1),
+              acre_lot DECIMAL(10, 4),
+              house_size DECIMAL(10, 2),
+              price DECIMAL(15, 2),
+              state VARCHAR(100),
+              status VARCHAR(50),
+              processing_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              source_batch_id VARCHAR(100)
+          );
+          
+          -- INFERENCE_LOGS: Registro de predicciones realizadas
+          CREATE TABLE IF NOT EXISTS inference_logs (
+              id SERIAL PRIMARY KEY,
+              timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              -- Input features
+              bed DECIMAL(5, 1),
+              bath DECIMAL(5, 1),
+              acre_lot DECIMAL(10, 4),
+              house_size DECIMAL(10, 2),
+              state VARCHAR(100),
+              status VARCHAR(50),
+              -- Output
+              predicted_price DECIMAL(15, 2),
+              -- Model info
+              model_version VARCHAR(50),
+              model_run_id VARCHAR(100),
+              -- Performance
+              response_time_ms DECIMAL(10, 2),
+              -- Additional metadata
+              client_ip VARCHAR(50),
+              request_id VARCHAR(100)
+          );
+          
+          -- DRIFT_HISTORY: Historial de detección de drift
+          CREATE TABLE IF NOT EXISTS drift_history (
+              id SERIAL PRIMARY KEY,
+              timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              drift_detected BOOLEAN,
+              drift_score DECIMAL(10, 6),
+              features_with_drift TEXT,
+              reference_batch_id VARCHAR(100),
+              current_batch_id VARCHAR(100),
+              action_taken VARCHAR(50)
+          );
+          
+          -- MODEL_HISTORY: Historial de modelos entrenados
+          CREATE TABLE IF NOT EXISTS model_history (
+              id SERIAL PRIMARY KEY,
+              timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              run_id VARCHAR(100),
+              model_version VARCHAR(50),
+              r2_score DECIMAL(10, 6),
+              rmse DECIMAL(15, 2),
+              mae DECIMAL(15, 2),
+              mape DECIMAL(10, 4),
+              promoted_to_production BOOLEAN,
+              promotion_reason TEXT,
+              training_samples INTEGER,
+              features_used TEXT
+          );
+          
+          -- Indexes for better query performance
+          CREATE INDEX IF NOT EXISTS idx_raw_data_timestamp ON raw_data(ingestion_timestamp);
+          CREATE INDEX IF NOT EXISTS idx_raw_data_batch ON raw_data(batch_id);
+          CREATE INDEX IF NOT EXISTS idx_clean_data_timestamp ON clean_data(processing_timestamp);
+          CREATE INDEX IF NOT EXISTS idx_inference_logs_timestamp ON inference_logs(timestamp);
+          CREATE INDEX IF NOT EXISTS idx_inference_logs_model ON inference_logs(model_version);
+          CREATE INDEX IF NOT EXISTS idx_drift_history_timestamp ON drift_history(timestamp);
+          CREATE INDEX IF NOT EXISTS idx_model_history_timestamp ON model_history(timestamp);
+          
+          -- Grant permissions
+          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO postgres;
+          
+          EOF
+          
+          echo "Tables created successfully!"
+          
+          # Verify tables
+          psql -h $PGHOST -U $PGUSER -d mlops_data -c "\dt"
+

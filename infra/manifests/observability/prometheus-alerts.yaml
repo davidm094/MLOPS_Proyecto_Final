@@ -1,0 +1,116 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mlops-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+    app: kube-prometheus-stack
+spec:
+  groups:
+    - name: mlops-api
+      rules:
+        # API Down Alert
+        - alert: MLOpsAPIDown
+          expr: up{job="mlops-api"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "MLOps API is down"
+            description: "The MLOps prediction API has been down for more than 1 minute."
+        
+        # High Latency Alert
+        - alert: MLOpsAPIHighLatency
+          expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler="/predict"}[5m])) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "MLOps API high latency"
+            description: "The 95th percentile latency for /predict is above 2 seconds."
+        
+        # High Error Rate Alert
+        - alert: MLOpsAPIHighErrorRate
+          expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "MLOps API high error rate"
+            description: "Error rate is above 5% for the last 5 minutes."
+        
+        # Model Not Loaded Alert
+        - alert: MLOpsModelNotLoaded
+          expr: model_loaded == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "MLOps model not loaded"
+            description: "The ML model has not been loaded for more than 2 minutes."
+        
+        # SHAP Explainer Not Available
+        - alert: MLOpsSHAPNotAvailable
+          expr: explainer_loaded == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SHAP Explainer not available"
+            description: "The SHAP explainer is not loaded, /explain endpoint will fail."
+    
+    - name: mlops-infrastructure
+      rules:
+        # Pod Restart Alert
+        - alert: MLOpsPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="mlops"}[1h]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "MLOps pod restarting frequently"
+            description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last hour."
+        
+        # High Memory Usage
+        - alert: MLOpsHighMemoryUsage
+          expr: container_memory_usage_bytes{namespace="mlops"} / container_spec_memory_limit_bytes{namespace="mlops"} > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage in MLOps namespace"
+            description: "Container {{ $labels.container }} is using more than 90% of its memory limit."
+        
+        # Pod Not Ready
+        - alert: MLOpsPodNotReady
+          expr: kube_pod_status_ready{namespace="mlops", condition="true"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "MLOps pod not ready"
+            description: "Pod {{ $labels.pod }} has been not ready for more than 5 minutes."
+    
+    - name: mlops-ml-pipeline
+      rules:
+        # Airflow DAG Failure (if metrics are exposed)
+        - alert: AirflowDAGFailed
+          expr: airflow_dag_run_failed_total > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Airflow DAG failed"
+            description: "An Airflow DAG run has failed."
+        
+        # MLflow Server Down
+        - alert: MLflowServerDown
+          expr: up{job="mlflow"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "MLflow server is down"
+            description: "The MLflow tracking server has been down for more than 2 minutes."
+

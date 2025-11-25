@@ -8,4 +8,7 @@ boto3
 psycopg2-binary
 numpy
 joblib
-
+sqlalchemy
+prometheus-fastapi-instrumentator
+prometheus-client
+xgboost

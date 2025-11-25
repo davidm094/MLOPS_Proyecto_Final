@@ -1,36 +1,172 @@
-name: Build and Push Images
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'apps/**'
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-and-push:
+  # ============================================
+  # UNIT TESTS
+  # ============================================
+  test:
+    name: Run Tests
     runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/requirements.txt
+        pip install -r apps/api/requirements.txt
+        pip install -r apps/airflow/requirements.txt
+    
+    - name: Run unit tests
+      run: |
+        pytest tests/ -v --cov=apps --cov-report=xml --cov-report=term-missing \
+          --ignore=tests/load \
+          -x --tb=short
+      env:
+        MLFLOW_TRACKING_URI: http://mock:5000
+        DATABASE_URL: postgresql://mock:mock@localhost/mock
+    
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+        verbose: true
+
+  # ============================================
+  # LINT
+  # ============================================
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install linters
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort
+    
+    - name: Run flake8
+      run: |
+        flake8 apps/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 apps/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+      continue-on-error: true
+    
+    - name: Check formatting with black
+      run: black --check apps/ tests/ --line-length 120
+      continue-on-error: true
+
+  # ============================================
+  # BUILD AND PUSH IMAGES
+  # ============================================
+  build-and-push:
+    name: Build and Push Images
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
     strategy:
       matrix:
         app: [airflow, api, frontend]
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
       
     - name: Login to DockerHub
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-${{ matrix.app }}
+        tags: |
+          type=sha,prefix=
+          type=raw,value=latest
+          type=raw,value=v${{ github.run_number }}
         
     - name: Build and push
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       with:
         context: apps/${{ matrix.app }}
         push: true
-        tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/mlops-${{ matrix.app }}:${{ github.sha }}
-          ${{ secrets.DOCKERHUB_USERNAME }}/mlops-${{ matrix.app }}:latest
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
+  # ============================================
+  # LOAD TEST (Smoke Test)
+  # ============================================
+  load-test-smoke:
+    name: Load Test (Smoke)
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install Locust
+      run: pip install locust
+    
+    - name: Run smoke test (dry run)
+      run: |
+        echo "Locust smoke test would run here against staging environment"
+        echo "Skipping actual test as no staging environment is available in CI"
+        # In a real setup with staging:
+        # locust -f tests/load/locustfile.py --host=https://staging-api.example.com \
+        #   --headless -u 10 -r 2 -t 30s --csv=results/smoke
+      continue-on-error: true
+
+  # ============================================
+  # SECURITY SCAN
+  # ============================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        exit-code: '0'
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH'
+      continue-on-error: true

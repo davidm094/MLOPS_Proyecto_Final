@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import pandas as pd
@@ -9,15 +9,48 @@ import logging
 import joblib
 import boto3
 import mlflow
+import time
+import uuid
 from io import BytesIO
+from datetime import datetime
+from sqlalchemy import create_engine, text
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram, Gauge, Info
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Real Estate Price Prediction API", version="4.0")
+app = FastAPI(title="Real Estate Price Prediction API", version="5.0")
 
-# Configuration
+# ============================================
+# PROMETHEUS METRICS
+# ============================================
+PREDICTIONS_TOTAL = Counter(
+    'predictions_total', 
+    'Total number of predictions made',
+    ['state', 'model_version']
+)
+PREDICTION_LATENCY = Histogram(
+    'prediction_latency_seconds',
+    'Prediction request latency',
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+)
+PREDICTION_PRICE = Histogram(
+    'prediction_price_dollars',
+    'Distribution of predicted prices',
+    buckets=[100000, 250000, 500000, 750000, 1000000, 1500000, 2000000, 5000000]
+)
+MODEL_INFO = Info('model', 'Information about the loaded model')
+MODEL_LOADED = Gauge('model_loaded', 'Whether a model is currently loaded')
+EXPLAINER_LOADED = Gauge('explainer_loaded', 'Whether SHAP explainer is loaded')
+
+# Initialize Prometheus instrumentation
+Instrumentator().instrument(app).expose(app)
+
+# ============================================
+# CONFIGURATION
+# ============================================
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://seaweedfs-s3.mlops.svc:8333")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "any")
@@ -25,16 +58,18 @@ AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "any")
 MLFLOW_BUCKET = "mlflow-artifacts"
 MODEL_NAME = "real_estate_model"
 
+# PostgreSQL for inference logging
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:airflow-postgres-root@postgres-postgresql.mlops.svc.cluster.local:5432/mlops_data')
+
 # Global variables
 model = None
-state_means = None  # For state encoding
+state_means = None
 explainer = None
 model_version = None
 model_stage = None
 model_run_id = None
 feature_names = None
 
-# Default state mean for unknown states
 DEFAULT_STATE_MEAN = 1_000_000
 
 def get_s3_client():
@@ -45,6 +80,43 @@ def get_s3_client():
         aws_secret_access_key=AWS_SECRET_KEY
     )
 
+def get_db_engine():
+    """Get SQLAlchemy engine for PostgreSQL."""
+    try:
+        return create_engine(DATABASE_URL)
+    except Exception as e:
+        logger.warning(f"Could not create DB engine: {e}")
+        return None
+
+def log_inference(input_data, prediction, response_time_ms, request_id, client_ip):
+    """Log inference to PostgreSQL."""
+    try:
+        engine = get_db_engine()
+        if engine is None:
+            return
+        
+        data = {
+            'timestamp': [datetime.now()],
+            'bed': [input_data.bed],
+            'bath': [input_data.bath],
+            'acre_lot': [input_data.acre_lot],
+            'house_size': [input_data.house_size],
+            'state': [input_data.state],
+            'status': [input_data.status],
+            'predicted_price': [prediction],
+            'model_version': [model_version],
+            'model_run_id': [model_run_id],
+            'response_time_ms': [response_time_ms],
+            'client_ip': [client_ip],
+            'request_id': [request_id]
+        }
+        
+        df = pd.DataFrame(data)
+        df.to_sql('inference_logs', engine, if_exists='append', index=False)
+        logger.debug(f"Logged inference: {request_id}")
+    except Exception as e:
+        logger.warning(f"Failed to log inference: {e}")
+
 def load_production_model():
     """Load the model marked as 'Production' in MLflow Model Registry."""
     global model, state_means, explainer, model_version, model_stage, model_run_id, feature_names
@@ -53,7 +125,6 @@ def load_production_model():
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         client = mlflow.tracking.MlflowClient()
         
-        # Get Production model from registry
         try:
             versions = client.get_latest_versions(MODEL_NAME, stages=["Production"])
             if versions:
@@ -68,7 +139,6 @@ def load_production_model():
                 
                 # Load model
                 try:
-                    # Try sklearn model path first
                     model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/model/model.pkl")
                     model = joblib.load(BytesIO(model_obj['Body'].read()))
                     logger.info("Model loaded successfully")
@@ -76,13 +146,13 @@ def load_production_model():
                     logger.error(f"Could not load model: {e}")
                     return False
                 
-                # Load state_means for feature engineering
+                # Load state_means
                 try:
                     state_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/state_means.pkl")
                     state_means = joblib.load(BytesIO(state_obj['Body'].read()))
                     logger.info(f"Loaded state_means with {len(state_means)} states")
                 except Exception as e:
-                    logger.warning(f"Could not load state_means: {e}. Using defaults.")
+                    logger.warning(f"Could not load state_means: {e}")
                     state_means = {}
                 
                 # Load feature names
@@ -94,7 +164,7 @@ def load_production_model():
                     logger.warning(f"Could not load feature names: {e}")
                     feature_names = ['bed', 'bath', 'acre_lot', 'house_size']
                 
-                # Create SHAP explainer (if possible)
+                # Create SHAP explainer
                 try:
                     explainer = shap.TreeExplainer(model)
                     logger.info("SHAP Explainer created")
@@ -102,13 +172,22 @@ def load_production_model():
                     logger.warning(f"Could not create explainer: {e}")
                     explainer = None
                 
+                # Update Prometheus metrics
+                MODEL_LOADED.set(1)
+                EXPLAINER_LOADED.set(1 if explainer else 0)
+                MODEL_INFO.info({
+                    'name': MODEL_NAME,
+                    'version': str(model_version),
+                    'stage': model_stage,
+                    'run_id': model_run_id[:12]
+                })
+                
                 return True
             else:
                 logger.warning(f"No Production model found for '{MODEL_NAME}'")
         except mlflow.exceptions.MlflowException as e:
             logger.warning(f"Model '{MODEL_NAME}' not registered: {e}")
         
-        # Fallback to latest S3 model
         return load_latest_model_from_s3()
         
     except Exception as e:
@@ -125,9 +204,9 @@ def load_latest_model_from_s3():
         
         if 'Contents' not in response:
             logger.warning("No artifacts found in MLflow bucket")
+            MODEL_LOADED.set(0)
             return False
         
-        # Find most recent model
         run_times = {}
         for obj in response['Contents']:
             parts = obj['Key'].split('/')
@@ -138,6 +217,7 @@ def load_latest_model_from_s3():
                     run_times[run_id] = last_modified
         
         if not run_times:
+            MODEL_LOADED.set(0)
             return False
         
         latest_run = max(run_times.keys(), key=lambda x: run_times[x])
@@ -150,14 +230,12 @@ def load_latest_model_from_s3():
         model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/model/model.pkl")
         model = joblib.load(BytesIO(model_obj['Body'].read()))
         
-        # Try to load state_means
         try:
             state_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/state_means.pkl")
             state_means = joblib.load(BytesIO(state_obj['Body'].read()))
         except:
             state_means = {}
         
-        # Try to load feature names
         try:
             feat_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/features.txt")
             feature_names = feat_obj['Body'].read().decode('utf-8').strip().split('\n')
@@ -169,16 +247,23 @@ def load_latest_model_from_s3():
         except:
             explainer = None
         
+        MODEL_LOADED.set(1)
+        EXPLAINER_LOADED.set(1 if explainer else 0)
+        
         return True
         
     except Exception as e:
         logger.error(f"Error loading model from S3: {e}")
+        MODEL_LOADED.set(0)
         return False
 
 @app.on_event("startup")
 async def startup_event():
     load_production_model()
 
+# ============================================
+# PYDANTIC MODELS
+# ============================================
 class PropertyInput(BaseModel):
     bed: float = 3.0
     bath: float = 2.0
@@ -196,6 +281,7 @@ class PredictionResponse(BaseModel):
     model_run_id: str
     features_used: List[str]
     input_summary: Dict
+    request_id: str
 
 class ExplanationResponse(BaseModel):
     price: float
@@ -215,6 +301,15 @@ class ModelInfo(BaseModel):
     available_states: List[str]
     feature_names: List[str]
 
+class HealthResponse(BaseModel):
+    status: str
+    model_loaded: bool
+    explainer_loaded: bool
+    database_connected: bool
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
 def prepare_features(input_data: PropertyInput) -> pd.DataFrame:
     """Prepare all features including engineered ones."""
     bed = float(input_data.bed) if input_data.bed else 3.0
@@ -222,7 +317,6 @@ def prepare_features(input_data: PropertyInput) -> pd.DataFrame:
     acre_lot = float(input_data.acre_lot) if input_data.acre_lot else 0.25
     house_size = float(input_data.house_size) if input_data.house_size else 1800.0
     
-    # Get state mean (target encoding)
     state = input_data.state or "California"
     if state_means and state in state_means:
         state_price_mean = state_means[state]
@@ -231,10 +325,8 @@ def prepare_features(input_data: PropertyInput) -> pd.DataFrame:
     else:
         state_price_mean = DEFAULT_STATE_MEAN
     
-    # Status encoding
     is_sold = 1 if input_data.status == "sold" else 0
     
-    # Feature engineering
     data = {
         'bed': bed,
         'bath': bath,
@@ -249,17 +341,19 @@ def prepare_features(input_data: PropertyInput) -> pd.DataFrame:
         'lot_to_house_ratio': acre_lot * 43560 / (house_size + 1)
     }
     
-    # Only include features the model expects
     if feature_names:
         data = {k: v for k, v in data.items() if k in feature_names}
     
     return pd.DataFrame([data])
 
+# ============================================
+# ENDPOINTS
+# ============================================
 @app.get("/")
 def root():
     return {
         "service": "Real Estate Price Prediction API",
-        "version": "4.0",
+        "version": "5.0",
         "model_name": MODEL_NAME,
         "model_version": model_version,
         "model_stage": model_stage,
@@ -269,17 +363,34 @@ def root():
         "features": feature_names
     }
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 def health():
-    return {
-        "status": "healthy",
-        "model_loaded": model is not None,
-        "explainer_loaded": explainer is not None
-    }
+    db_connected = False
+    try:
+        engine = get_db_engine()
+        if engine:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            db_connected = True
+    except:
+        pass
+    
+    return HealthResponse(
+        status="healthy" if model is not None else "degraded",
+        model_loaded=model is not None,
+        explainer_loaded=explainer is not None,
+        database_connected=db_connected
+    )
+
+@app.get("/ready")
+def ready():
+    """Readiness probe - returns 200 only if model is loaded."""
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    return {"status": "ready"}
 
 @app.get("/model", response_model=ModelInfo)
 def get_model_info():
-    """Get information about the currently loaded model."""
     return ModelInfo(
         model_name=MODEL_NAME,
         model_version=model_version or "unknown",
@@ -293,17 +404,13 @@ def get_model_info():
 
 @app.get("/states")
 def get_states():
-    """Get list of available states and their average prices."""
     if state_means:
         sorted_states = sorted(state_means.items(), key=lambda x: x[1], reverse=True)
-        return {
-            "states": [{"state": k, "avg_price": v} for k, v in sorted_states]
-        }
+        return {"states": [{"state": k, "avg_price": v} for k, v in sorted_states]}
     return {"states": []}
 
 @app.post("/reload")
 def reload_model():
-    """Reload model from MLflow Model Registry."""
     success = load_production_model()
     if success:
         return {
@@ -318,17 +425,36 @@ def reload_model():
         raise HTTPException(status_code=500, detail="Failed to reload model")
 
 @app.post("/predict", response_model=PredictionResponse)
-def predict(input_data: PropertyInput):
-    """Predict property price."""
+def predict(input_data: PropertyInput, request: Request):
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded. Call /reload first.")
+    
+    start_time = time.time()
+    request_id = str(uuid.uuid4())
     
     try:
         df = prepare_features(input_data)
         prediction = model.predict(df)
+        price = float(prediction[0])
+        
+        # Calculate response time
+        response_time_ms = (time.time() - start_time) * 1000
+        
+        # Update Prometheus metrics
+        state = input_data.state or "unknown"
+        PREDICTIONS_TOTAL.labels(state=state, model_version=str(model_version)).inc()
+        PREDICTION_LATENCY.observe(response_time_ms / 1000)
+        PREDICTION_PRICE.observe(price)
+        
+        # Log to PostgreSQL (async-like, non-blocking)
+        try:
+            client_ip = request.client.host if request.client else "unknown"
+            log_inference(input_data, price, response_time_ms, request_id, client_ip)
+        except Exception as e:
+            logger.warning(f"Failed to log inference: {e}")
         
         return PredictionResponse(
-            price=float(prediction[0]),
+            price=price,
             model_version=model_version or "unknown",
             model_stage=model_stage or "unknown",
             model_run_id=model_run_id or "unknown",
@@ -339,7 +465,8 @@ def predict(input_data: PropertyInput):
                 "acre_lot": input_data.acre_lot,
                 "house_size": input_data.house_size,
                 "state": input_data.state or "California"
-            }
+            },
+            request_id=request_id
         )
     except Exception as e:
         logger.error(f"Prediction error: {e}")
@@ -347,17 +474,15 @@ def predict(input_data: PropertyInput):
 
 @app.post("/explain", response_model=ExplanationResponse)
 def explain(input_data: PropertyInput):
-    """Get SHAP explanation for prediction."""
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     if explainer is None:
-        raise HTTPException(status_code=503, detail="SHAP Explainer not available for this model type")
+        raise HTTPException(status_code=503, detail="SHAP Explainer not available")
     
     try:
         df = prepare_features(input_data)
         prediction = model.predict(df)
         
-        # Get SHAP values
         shap_values = explainer.shap_values(df)
         
         if isinstance(shap_values, list):
@@ -365,7 +490,6 @@ def explain(input_data: PropertyInput):
         else:
             shap_vals = shap_values[0]
         
-        # Get base value
         if hasattr(explainer, 'expected_value'):
             if isinstance(explainer.expected_value, (list, np.ndarray)):
                 base_val = float(explainer.expected_value[0]) if len(explainer.expected_value) > 0 else float(explainer.expected_value)
@@ -388,7 +512,6 @@ def explain(input_data: PropertyInput):
 
 @app.post("/batch_predict")
 def batch_predict(properties: List[PropertyInput]):
-    """Predict prices for multiple properties."""
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
@@ -398,18 +521,56 @@ def batch_predict(properties: List[PropertyInput]):
             df = prepare_features(prop)
             pred = model.predict(df)[0]
             results.append({
-                "input": {
-                    "bed": prop.bed,
-                    "bath": prop.bath,
-                    "house_size": prop.house_size,
-                    "state": prop.state
-                },
+                "input": {"bed": prop.bed, "bath": prop.bath, "house_size": prop.house_size, "state": prop.state},
                 "price": float(pred)
             })
         except Exception as e:
-            results.append({
-                "input": {"bed": prop.bed, "bath": prop.bath},
-                "error": str(e)
-            })
+            results.append({"input": {"bed": prop.bed, "bath": prop.bath}, "error": str(e)})
     
     return {"predictions": results, "model_version": model_version}
+
+@app.get("/predictions/history")
+def get_prediction_history(limit: int = 100, state: Optional[str] = None):
+    """Get recent prediction history from database."""
+    try:
+        engine = get_db_engine()
+        if engine is None:
+            raise HTTPException(status_code=503, detail="Database not available")
+        
+        query = "SELECT * FROM inference_logs"
+        if state:
+            query += f" WHERE state = '{state}'"
+        query += f" ORDER BY timestamp DESC LIMIT {limit}"
+        
+        df = pd.read_sql(query, engine)
+        return {"predictions": df.to_dict(orient='records'), "count": len(df)}
+    except Exception as e:
+        logger.error(f"Failed to get prediction history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/metrics/summary")
+def get_metrics_summary():
+    """Get summary of prediction metrics."""
+    try:
+        engine = get_db_engine()
+        if engine is None:
+            return {"error": "Database not available"}
+        
+        query = """
+            SELECT 
+                COUNT(*) as total_predictions,
+                AVG(predicted_price) as avg_price,
+                MIN(predicted_price) as min_price,
+                MAX(predicted_price) as max_price,
+                AVG(response_time_ms) as avg_response_time_ms,
+                COUNT(DISTINCT state) as unique_states,
+                COUNT(DISTINCT model_version) as model_versions_used
+            FROM inference_logs
+            WHERE timestamp > NOW() - INTERVAL '24 hours'
+        """
+        
+        df = pd.read_sql(query, engine)
+        return df.to_dict(orient='records')[0] if len(df) > 0 else {}
+    except Exception as e:
+        logger.error(f"Failed to get metrics summary: {e}")
+        return {"error": str(e)}

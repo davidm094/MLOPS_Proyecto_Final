@@ -14,25 +14,59 @@ spec:
     metadata:
       labels:
         app: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
       - name: api
-        image: davidm094/mlops-api:v4
+        image: davidm094/mlops-api:v5
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
           name: http
         env:
+        # MLflow Configuration
         - name: MLFLOW_TRACKING_URI
-          value: "http://mlflow:5000"
-        - name: AWS_ACCESS_KEY_ID
-          value: "any"
-        - name: AWS_SECRET_ACCESS_KEY
-          value: "any"
-        - name: S3_ENDPOINT
-          value: "http://seaweedfs-s3.mlops.svc:8333"
+          valueFrom:
+            secretKeyRef:
+              name: mlflow-credentials
+              key: MLFLOW_TRACKING_URI
         - name: MLFLOW_S3_ENDPOINT_URL
-          value: "http://seaweedfs-s3.mlops.svc:8333"
+          valueFrom:
+            secretKeyRef:
+              name: mlflow-credentials
+              key: MLFLOW_S3_ENDPOINT_URL
+        # S3 Configuration
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: s3-credentials
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: s3-credentials
+              key: AWS_SECRET_ACCESS_KEY
+        - name: S3_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: s3-credentials
+              key: S3_ENDPOINT
+        # PostgreSQL Configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: DATABASE_URL
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
         livenessProbe:
           httpGet:
             path: /health
@@ -41,7 +75,7 @@ spec:
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /health
+            path: /ready
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 5
@@ -63,4 +97,3 @@ spec:
     name: http
   selector:
     app: api
-
