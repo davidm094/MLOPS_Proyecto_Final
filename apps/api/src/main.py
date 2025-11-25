@@ -14,8 +14,10 @@ import uuid
 from io import BytesIO
 from datetime import datetime
 from sqlalchemy import create_engine, text
-from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -45,7 +47,38 @@ MODEL_INFO = Info('model', 'Information about the loaded model')
 MODEL_LOADED = Gauge('model_loaded', 'Whether a model is currently loaded')
 EXPLAINER_LOADED = Gauge('explainer_loaded', 'Whether SHAP explainer is loaded')
 
-# Prometheus instrumentation will be initialized after all routes are defined
+# Prometheus HTTP metrics (will be instrumented via middleware)
+HTTP_REQUESTS_TOTAL = Counter(
+    'http_requests_total',
+    'Total HTTP requests',
+    ['method', 'endpoint', 'status']
+)
+HTTP_REQUEST_DURATION = Histogram(
+    'http_request_duration_seconds',
+    'HTTP request duration',
+    ['method', 'endpoint'],
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+)
+
+# Middleware to instrument HTTP requests (excludes health checks)
+class PrometheusMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Skip instrumentation for health checks and metrics
+        if request.url.path in ["/ready", "/health", "/metrics"]:
+            return await call_next(request)
+        
+        method = request.method
+        endpoint = request.url.path
+        
+        start_time = time.time()
+        response = await call_next(request)
+        duration = time.time() - start_time
+        
+        # Record metrics
+        HTTP_REQUESTS_TOTAL.labels(method=method, endpoint=endpoint, status=response.status_code).inc()
+        HTTP_REQUEST_DURATION.labels(method=method, endpoint=endpoint).observe(duration)
+        
+        return response
 
 # ============================================
 # CONFIGURATION
@@ -259,14 +292,9 @@ def load_latest_model_from_s3():
 @app.on_event("startup")
 async def startup_event():
     load_production_model()
-    # Initialize Prometheus instrumentation after app is fully loaded
-    # This ensures all routes are registered before instrumentation
-    # Only instrument, don't expose (we have manual /metrics endpoint)
-    try:
-        instrumentator.instrument(app)
-        logger.info("Prometheus instrumentation initialized")
-    except Exception as e:
-        logger.warning(f"Failed to initialize Prometheus instrumentation: {e}")
+    # Add Prometheus middleware (excludes health checks)
+    app.add_middleware(PrometheusMiddleware)
+    logger.info("Prometheus middleware initialized")
 
 # ============================================
 # PYDANTIC MODELS
@@ -590,8 +618,5 @@ def metrics():
     from fastapi.responses import Response
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-# Prometheus Instrumentator - will be initialized in startup event
-# Exclude health check endpoints to avoid conflicts
-instrumentator = Instrumentator(
-    excluded_handlers=["/health", "/ready", "/", "/metrics"]
-)
+# Prometheus instrumentation is now handled via custom middleware
+# This avoids conflicts with health check endpoints
