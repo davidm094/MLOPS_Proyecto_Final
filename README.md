@@ -4,21 +4,57 @@ Este repositorio contiene la implementación completa de una plataforma MLOps En
 
 ## 🏗 Arquitectura
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              K3d Cluster                                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
-│  │   Argo CD   │  │   Airflow   │  │   MLflow    │  │  SeaweedFS  │            │
-│  │  (GitOps)   │  │ (Pipelines) │  │ (Tracking)  │  │    (S3)     │            │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘            │
-│         │                │                │                │                    │
-│         └────────────────┴────────────────┴────────────────┘                    │
-│                                   │                                              │
-│  ┌─────────────┐  ┌─────────────┐│  ┌─────────────┐  ┌─────────────┐           │
-│  │   FastAPI   │  │  Streamlit  ││  │ PostgreSQL  │  │  Prometheus │           │
-│  │    (API)    │  │ (Frontend)  ││  │  (Metadata) │  │  + Grafana  │           │
-│  └─────────────┘  └─────────────┘│  └─────────────┘  └─────────────┘           │
-└─────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph K3d_Cluster [K3d Cluster]
+        subgraph Namespace_ArgoCD [Namespace: argocd]
+            ArgoCD[("🐙 Argo CD")]
+        end
+        
+        subgraph Namespace_MLOps [Namespace: mlops]
+            direction TB
+            
+            subgraph Data_Layer [Data & Storage]
+                SeaweedFS[("🍃 SeaweedFS (S3)")]
+                PostgreSQL[("🐘 PostgreSQL")]
+            end
+            
+            subgraph Orchestration [Orchestration & Tracking]
+                Airflow[("💨 Airflow")]
+                MLflow[("🧪 MLflow")]
+            end
+            
+            subgraph Inference [Inference & UI]
+                FastAPI[("⚡ FastAPI")]
+                Streamlit[("🖥️ Streamlit")]
+            end
+            
+            subgraph Observability [Observability]
+                Prometheus[("🔥 Prometheus")]
+                Grafana[("📊 Grafana")]
+            end
+        end
+    end
+    
+    Git[("GitHub Repo")] -->|Sync| ArgoCD
+    ArgoCD -->|Deploy| Namespace_MLOps
+    
+    Airflow -->|Read/Write| SeaweedFS
+    Airflow -->|Metadata| PostgreSQL
+    Airflow -->|Track| MLflow
+    
+    MLflow -->|Artifacts| SeaweedFS
+    MLflow -->|Metadata| PostgreSQL
+    
+    FastAPI -->|Load Model| MLflow
+    FastAPI -->|Read| SeaweedFS
+    
+    Streamlit -->|Predict/Explain| FastAPI
+    
+    Prometheus -->|Scrape| Airflow
+    Prometheus -->|Scrape| FastAPI
+    Prometheus -->|Scrape| MLflow
+    Grafana -->|Query| Prometheus
 ```
 
 ### Infraestructura
@@ -91,21 +127,19 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 ## 🤖 Pipeline de Machine Learning
 
 ### Flujo del DAG
-```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│    start     │───▶│ ingest_data  │───▶│ check_drift  │───▶│ train_model  │
-└──────────────┘    └──────────────┘    └──────────────┘    └──────┬───────┘
-                                               │                    │
-                                               │ (no drift)         │
-                                               ▼                    ▼
-                                        ┌──────────────┐    ┌──────────────┐
-                                        │skip_training │    │  reload_api  │
-                                        └──────┬───────┘    └──────┬───────┘
-                                               │                    │
-                                               ▼                    ▼
-                                        ┌──────────────┐    ┌──────────────┐
-                                        │ end_pipeline │◀───│ end_pipeline │
-                                        └──────────────┘    └──────────────┘
+```mermaid
+graph LR
+    Start((Start)) --> Ingest[📥 Ingest Data]
+    Ingest --> Drift{📉 Check Drift}
+    
+    Drift -->|Yes| Train[🏋️ Train Model]
+    Drift -->|No| End((End))
+    
+    Train --> Promote{🏆 Promote?}
+    Promote -->|Yes| Reload[🔄 Reload API]
+    Promote -->|No| End
+    
+    Reload --> End
 ```
 
 ### Descripción de Tareas
