@@ -76,6 +76,7 @@ graph TD
 
 ### Componentes MLOps
 - **Orquestación:** Apache Airflow con KubernetesExecutor y Git-Sync
+  ![Airflow Dashboard](docs/airflow_dashboard.png)
 - **Experiment Tracking:** MLflow (Backend: Postgres, Artifacts: SeaweedFS S3)
 - **Model Serving:** FastAPI con endpoints de predicción y explicabilidad
 - **Interpretabilidad:** SHAP TreeExplainer para explicaciones de predicciones
