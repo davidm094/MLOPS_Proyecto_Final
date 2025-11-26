@@ -85,7 +85,6 @@ graph TD
   ![Frontend Dashboard](docs/frontend_dashboard.png)
 - **CI/CD:** GitHub Actions para build, test y push de imágenes Docker
 - **Monitoring:** Prometheus + Grafana con dashboards y alertas
-  ![Grafana Dashboard](docs/grafana_dashboard.png)
 
 ## 🚀 Inicio Rápido
 

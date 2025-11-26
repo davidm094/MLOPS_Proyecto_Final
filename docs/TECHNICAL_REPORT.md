@@ -949,7 +949,7 @@ MLOPS_Proyecto_Final/
 
 ### 4.3 Observabilidad (Grafana)
 
-![Grafana Dashboard](grafana_dashboard.png)
+(Ver dashboard en vivo en http://localhost:30300)
 
 ### 4.4 Frontenda)
 
