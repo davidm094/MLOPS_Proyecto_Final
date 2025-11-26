@@ -80,6 +80,7 @@ graph TD
 - **Model Serving:** FastAPI con endpoints de predicción y explicabilidad
 - **Interpretabilidad:** SHAP TreeExplainer para explicaciones de predicciones
 - **Frontend:** Streamlit con visualizaciones interactivas
+  ![Frontend Dashboard](docs/frontend_dashboard.png)
 - **CI/CD:** GitHub Actions para build, test y push de imágenes Docker
 - **Monitoring:** Prometheus + Grafana con dashboards y alertas
 

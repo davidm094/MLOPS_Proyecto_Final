@@ -458,6 +458,8 @@ def load_latest_model():
 2. **SHAP Explanation:** Gráfico de barras + tabla de contribuciones
 3. **Model Info:** Estado del sistema + métricas
 
+![Frontend Dashboard](frontend_dashboard.png)
+
 ---
 
 ## 5. Pipeline de Machine Learning
