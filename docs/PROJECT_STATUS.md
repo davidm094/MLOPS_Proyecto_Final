@@ -625,5 +625,5 @@ argocd app sync api
 
 **Última Actualización:** 25 de Noviembre 2025, 01:30 AM  
 **Commit Actual:** `e9e8ad6`  
-**Autor:** David Moreno
+**Autores:** Anderson Alvarado, David Moreno, Juan Peña (Grupo 5)
 

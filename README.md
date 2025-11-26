@@ -455,9 +455,10 @@ curl -X POST http://localhost:30800/reload
 - [Grafana](https://grafana.com/)
 - [Locust](https://locust.io/)
 
-## 👥 Autor
-
-David Moreno - Proyecto Final MLOps 2025
+## 👥 Autores
+Anderson Alvarado 
+David Moreno 
+Juan Peña
 
 ## 📄 Licencia
 

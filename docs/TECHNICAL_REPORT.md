@@ -2,7 +2,7 @@
 
 ## Proyecto Final - Operaciones de Machine Learning 2025
 
-**Autor:** David Moreno  
+**Autores:** Anderson Alvarado, David Moreno, Juan Peña (Grupo 5)  
 **Fecha:** Noviembre 2025  
 **Repositorio:** https://github.com/davidm094/MLOPS_Proyecto_Final
 
