@@ -265,3 +265,21 @@ kubectl exec -n mlops $SCHEDULER_POD -c scheduler -- python3 -c "import mlflow; 
 - [ ] Upgrade MLflow server to 2.x for better compatibility
 - [ ] Add model versioning and A/B testing support
 - [ ] Implement automated retraining triggers
+
+## [2025-11-25] Final Deployment & Verification
+- **Event:** Full system audit and final fix implementation.
+- **Challenge:** API Pod failing readiness probe (404 on /ready) and crashing on startup.
+- **Root Cause:** 
+  1. Prometheus instrumentator intercepting health routes.
+  2. Invalid import of BaseHTTPMiddleware in runtime.
+  3. Incorrect middleware lifecycle management (adding in startup event).
+- **Solution:**
+  1. Implemented custom PrometheusMiddleware skipping /ready and /health.
+  2. Fixed imports to use starlette.middleware.base.
+  3. Moved middleware registration to global scope.
+  4. Fixed CI/CD build errors in Airflow Dockerfile.
+- **Status:** ✅ **SUCCESS**
+  - All pods Running (1/1).
+  - API responding 200 OK to /ready.
+  - Argo CD Healthy and Synced.
+  - CI/CD Pipeline passing (Tests + Build + Push).

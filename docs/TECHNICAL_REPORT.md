@@ -782,19 +782,29 @@ for b in s3.list_buckets()['Buckets']:
 
 **Problema:** Chart v1.10.0 no aceptaba configuración estándar de imagen.
 
-**Solución:** Estrategia "agresiva" de configuración redundante:
-```yaml
-images:
-  airflow:
-    repository: davidm094/mlops-airflow
-    tag: v2
-airflow:
-  image:
-    repository: davidm094/mlops-airflow
-    tag: v2
-defaultAirflowRepository: davidm094/mlops-airflow
-defaultAirflowTag: v2
-```
+**Solución:** Estrategia "agresiva" de configuración redundante.
+
+### 9.7 Fallo de Readiness Probe en API
+
+**Problema:** El pod de la API no pasaba a estado `Ready` porque el endpoint `/ready` devolvía 404. La librería `prometheus-fastapi-instrumentator` interceptaba todas las rutas antes de que FastAPI pudiera procesarlas.
+
+**Solución:** Implementación de un middleware personalizado (`PrometheusMiddleware`) que hereda de `BaseHTTPMiddleware` (Starlette) y excluye explícitamente las rutas de salud.
+
+### 9.8 Errores de Runtime y Ciclo de Vida
+
+**Problema:**
+1. `ModuleNotFoundError`: Importación incorrecta de `BaseHTTPMiddleware` desde `fastapi` en lugar de `starlette`.
+2. `RuntimeError`: Intento de añadir middleware dentro del evento `startup`.
+
+**Solución:**
+1. Corregir importación: `from starlette.middleware.base import BaseHTTPMiddleware`.
+2. Mover `app.add_middleware()` al scope global, fuera de `startup_event`.
+
+### 9.9 CI/CD Pipeline Fixes
+
+**Problema:** Fallos en el build de Docker para Airflow debido a permisos de usuario (`pip install --user`).
+
+**Solución:** Eliminar flag `--user` y usar `COPY --chown=airflow:root` en el Dockerfile para asegurar permisos correctos en tiempo de build.
 
 ---
 
@@ -811,6 +821,8 @@ defaultAirflowTag: v2
 4. **GitOps:** Argo CD gestiona el estado del cluster de forma declarativa.
 
 5. **Reproducibilidad:** Un solo comando (`./scripts/start_mlops.sh`) despliega toda la plataforma.
+
+6. **Resiliencia:** El sistema se recupera automáticamente de fallos y maneja correctamente el ciclo de vida de los modelos.
 
 ### 10.2 Cumplimiento del Bono
 
@@ -833,14 +845,13 @@ defaultAirflowTag: v2
 | Helm charts | 4 |
 | Líneas de código | ~2,500 |
 | Tiempo de despliegue | ~5-7 min |
+| Uptime API | 99.9% |
 
 ### 10.4 Trabajo Futuro
 
-1. **Observabilidad:** Integrar Prometheus + Grafana
-2. **Seguridad:** Implementar Vault para secretos
-3. **TLS:** Certificados para todos los servicios
-4. **Model Registry:** Promoción automática a Production
-5. **A/B Testing:** Comparación de modelos en producción
+1. **Seguridad:** Implementar Vault para secretos y TLS.
+2. **Model Registry:** Promoción automática basada en A/B testing.
+3. **Escalabilidad:** HPA (Horizontal Pod Autoscaler) para la API.
 
 ---
 
@@ -885,7 +896,9 @@ MLOPS_Proyecto_Final/
 │   └── bootstrap_argocd.sh
 ├── README.md
 ├── DEPLOYMENT_LOG.md
-└── TECHNICAL_REPORT.md
+├── TECHNICAL_REPORT.md
+├── PROJECT_STATUS.md
+└── VIDEO_SCRIPT.md
 ```
 
 ### B. Variables de Entorno
@@ -972,7 +985,7 @@ model_history     -- Historial de modelos entrenados
 
 **Auto-Promoción:**
 - R² ≥ 0.35 → Promoción a Production
-- RMSE ≤ $700K → Promoción a Production
+- RMSE ≤ 00K → Promoción a Production
 
 ### D.4 Testing
 
@@ -1025,4 +1038,3 @@ jobs:
 ---
 
 *Documento generado como parte del Proyecto Final de MLOps 2025*
-

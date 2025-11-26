@@ -270,10 +270,20 @@ Accede a http://localhost:30300 (admin/admin) para ver:
 ├── .github/
 │   └── workflows/
 │       └── ci.yaml               # GitHub Actions CI/CD
-├── DEPLOYMENT_LOG.md             # Bitácora detallada
-├── TECHNICAL_REPORT.md           # Reporte técnico
+├── docs/
+│   ├── DEPLOYMENT_LOG.md         # Bitácora detallada
+│   ├── TECHNICAL_REPORT.md       # Reporte técnico
+│   ├── PROJECT_STATUS.md         # Estado del proyecto
+│   └── references/               # Referencias y guías
 └── README.md
 ```
+
+## 📚 Documentación
+
+- [Reporte Técnico Completo](docs/TECHNICAL_REPORT.md)
+- [Estado del Proyecto](docs/PROJECT_STATUS.md)
+- [Bitácora de Despliegue](docs/DEPLOYMENT_LOG.md)
+- [Referencias](docs/references/)
 
 ## 🧪 Testing
 
