@@ -943,6 +943,16 @@ MLOPS_Proyecto_Final/
 
 ## Apéndice D: Mejoras Implementadas (Fase 2)
 
+### 4.2 MLflow Tracking
+
+![MLflow Dashboard](mlflow_dashboard.png)
+
+### 4.3 Observabilidad (Grafana)
+
+![Grafana Dashboard](grafana_dashboard.png)
+
+### 4.4 Frontenda)
+
 ### D.1 Observabilidad (Prometheus + Grafana)
 
 Se implementó un stack completo de observabilidad:

@@ -78,12 +78,14 @@ graph TD
 - **Orquestación:** Apache Airflow con KubernetesExecutor y Git-Sync
   ![Airflow Dashboard](docs/airflow_dashboard.png)
 - **Experiment Tracking:** MLflow (Backend: Postgres, Artifacts: SeaweedFS S3)
+  ![MLflow Dashboard](docs/mlflow_dashboard.png)
 - **Model Serving:** FastAPI con endpoints de predicción y explicabilidad
 - **Interpretabilidad:** SHAP TreeExplainer para explicaciones de predicciones
 - **Frontend:** Streamlit con visualizaciones interactivas
   ![Frontend Dashboard](docs/frontend_dashboard.png)
 - **CI/CD:** GitHub Actions para build, test y push de imágenes Docker
 - **Monitoring:** Prometheus + Grafana con dashboards y alertas
+  ![Grafana Dashboard](docs/grafana_dashboard.png)
 
 ## 🚀 Inicio Rápido
 
