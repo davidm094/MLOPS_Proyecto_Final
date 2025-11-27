@@ -2,11 +2,11 @@
 
 **Fecha:** 25 de Noviembre 2025  
 **Repositorio:** https://github.com/davidm094/MLOPS_Proyecto_Final  
-**Última Actualización:** Commit `e9e8ad6` - PROYECTO ENTREGADO Y VERIFICADO 🚀
+**Última Actualización:** Commit `e9e8ad6` - PROYECTO ENTREGADO Y VERIFICADO 
 
 ---
 
-## 📋 Tabla de Contenidos
+##  Tabla de Contenidos
 
 1. [Resumen del Proyecto](#1-resumen-del-proyecto)
 2. [Arquitectura Actual](#2-arquitectura-actual)
@@ -65,16 +65,16 @@ Plataforma MLOps End-to-End desplegada sobre Kubernetes (K3d) que automatiza el 
 
 | Requerimiento | Estado | Detalles |
 |--------------|--------|----------|
-| Pipeline automatizado | ✅ | DAG de Airflow con ingestión, drift detection, entrenamiento |
-| Registro de modelos | ✅ | MLflow con PostgreSQL y S3 (SeaweedFS) |
-| API de inferencia | ✅ | FastAPI con `/predict` y `/explain` |
-| Interfaz gráfica | ✅ | Streamlit con visualizaciones SHAP |
-| CI/CD | ✅ | GitHub Actions para build y push |
-| GitOps | ✅ | Argo CD con sync automático |
-| Interpretabilidad | ✅ | SHAP TreeExplainer integrado |
-| Kubernetes completo | ✅ | Todos los servicios containerizados |
-| Helm | ✅ | Airflow, MLflow, PostgreSQL via Helm |
-| Airflow Git-Sync | ✅ | DAGs sincronizados desde Git |
+| Pipeline automatizado |  | DAG de Airflow con ingestión, drift detection, entrenamiento |
+| Registro de modelos |  | MLflow con PostgreSQL y S3 (SeaweedFS) |
+| API de inferencia |  | FastAPI con `/predict` y `/explain` |
+| Interfaz gráfica |  | Streamlit con visualizaciones SHAP |
+| CI/CD |  | GitHub Actions para build y push |
+| GitOps |  | Argo CD con sync automático |
+| Interpretabilidad |  | SHAP TreeExplainer integrado |
+| Kubernetes completo |  | Todos los servicios containerizados |
+| Helm |  | Airflow, MLflow, PostgreSQL via Helm |
+| Airflow Git-Sync |  | DAGs sincronizados desde Git |
 
 ---
 
@@ -154,18 +154,18 @@ airflow-scheduler-694b5f64c-ckhdq          3/3     Running     4          9h
 airflow-statsd-9848cd6f8-l46vk             1/1     Running     0          10h
 airflow-triggerer-0                        3/3     Running     3          10h
 airflow-webserver-68479c8869-c7k57         1/1     Running     0          7h49m
-api-59894449bc-bxn4n                       0/1     Running     0          8h      ⚠️
-api-5bb7647b47-2fwxl                       1/1     Running     0          9h      ✅
-frontend-545d74565d-5tqj4                  1/1     Running     0          8h      ✅
-mlflow-75f79784cc-9gmx2                    1/1     Running     0          34h     ✅
+api-59894449bc-bxn4n                       0/1     Running     0          8h      
+api-5bb7647b47-2fwxl                       1/1     Running     0          9h      
+frontend-545d74565d-5tqj4                  1/1     Running     0          8h      
+mlflow-75f79784cc-9gmx2                    1/1     Running     0          34h     
 ```
 
 ### 3.2 Estado en Argo CD
 
-- **Sync Status:** ✅ Synced to HEAD (`e9e8ad6`)
-- **App Health:** ⚠️ Degraded (debido a pod API con readiness probe fallando)
+- **Sync Status:**  Synced to HEAD (`e9e8ad6`)
+- **App Health:**  Degraded (debido a pod API con readiness probe fallando)
 - **Last Sync:** Succeeded (hace ~1 minuto)
-- **Auto Sync:** ✅ Enabled
+- **Auto Sync:**  Enabled
 
 ### 3.3 Problema Actual
 
@@ -195,9 +195,9 @@ mlflow-75f79784cc-9gmx2                    1/1     Running     0          34h   
 **Commit:** `e9e8ad6` - "fix: Replace Instrumentator with custom middleware to fix /ready 404"
 
 **Cambios:**
-1. ❌ **Removido:** `prometheus-fastapi-instrumentator`
-2. ✅ **Agregado:** Middleware personalizado `PrometheusMiddleware`
-3. ✅ **Configuración:** Middleware explícitamente omite `/ready`, `/health`, `/metrics`
+1.  **Removido:** `prometheus-fastapi-instrumentator`
+2.  **Agregado:** Middleware personalizado `PrometheusMiddleware`
+3.  **Configuración:** Middleware explícitamente omite `/ready`, `/health`, `/metrics`
 
 **Código del Middleware:**
 ```python
@@ -227,19 +227,19 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 - Métricas de Prometheus siguen funcionando
 
 #### Estado
-- ✅ **Código:** Commiteado y pusheado
-- ⏳ **Imagen:** Pendiente de build por CI/CD
-- ⏳ **Despliegue:** Pendiente de sync por Argo CD
+-  **Código:** Commiteado y pusheado
+-  **Imagen:** Pendiente de build por CI/CD
+-  **Despliegue:** Pendiente de sync por Argo CD
 
 ### 4.2 Historial de Fixes Recientes
 
 | Commit | Descripción | Estado |
 |--------|-------------|--------|
-| `e9e8ad6` | Replace Instrumentator with custom middleware | ✅ Commiteado |
-| `200a332` | Add error handling for Instrumentator | ⚠️ Reemplazado |
-| `9c22f6c` | Move /ready and /health to top | ⚠️ Reemplazado |
-| `263d8a4` | Improve Instrumentator configuration | ⚠️ Reemplazado |
-| `ec14b86` | Move Instrumentator to end of file | ⚠️ Reemplazado |
+| `e9e8ad6` | Replace Instrumentator with custom middleware |  Commiteado |
+| `200a332` | Add error handling for Instrumentator |  Reemplazado |
+| `9c22f6c` | Move /ready and /health to top |  Reemplazado |
+| `263d8a4` | Improve Instrumentator configuration |  Reemplazado |
+| `ec14b86` | Move Instrumentator to end of file |  Reemplazado |
 
 ---
 
@@ -485,9 +485,9 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
   - `prometheus-stack`
 
 **Estado Actual:**
-- ✅ Synced to HEAD
-- ⚠️ Health: Degraded (pod API con readiness probe fallando)
-- ✅ Auto sync enabled
+-  Synced to HEAD
+-  Health: Degraded (pod API con readiness probe fallando)
+-  Auto sync enabled
 
 ---
 
@@ -600,7 +600,7 @@ argocd app sync api
 
 El proyecto ha alcanzado el **100% de los objetivos**, incluyendo los bonos opcionales. La plataforma es robusta, observable y automatizada.
 
-### Estado Final: ENTREGADO 🏁
+### Estado Final: ENTREGADO 
 
 **Verificación Final:**
 - [x] Infraestructura estable (K3d + Argo CD)
@@ -619,7 +619,7 @@ El proyecto ha alcanzado el **100% de los objetivos**, incluyendo los bonos opci
 ---
 *Fin del reporte de estado.*
 
-### Estado General: ⚠️ Degraded (Temporal)
+### Estado General:  Degraded (Temporal)
 
 **Causa:** Pod API con readiness probe fallando debido a endpoint `/ready` devolviendo 404.
 
@@ -627,16 +627,16 @@ El proyecto ha alcanzado el **100% de los objetivos**, incluyendo los bonos opci
 
 **Expectativa:** Una vez desplegada la nueva imagen, el problema debería resolverse y la aplicación debería pasar a estado "Healthy".
 
-### Componentes Funcionando: ✅
+### Componentes Funcionando: 
 
-- ✅ Airflow (scheduler, webserver, triggerer)
-- ✅ MLflow (tracking server)
-- ✅ PostgreSQL (todas las bases de datos)
-- ✅ SeaweedFS (S3 storage)
-- ✅ Streamlit (frontend)
-- ✅ Prometheus + Grafana (monitoring)
-- ✅ Argo CD (GitOps)
-- ⚠️ FastAPI (API funcionando pero readiness probe fallando)
+-  Airflow (scheduler, webserver, triggerer)
+-  MLflow (tracking server)
+-  PostgreSQL (todas las bases de datos)
+-  SeaweedFS (S3 storage)
+-  Streamlit (frontend)
+-  Prometheus + Grafana (monitoring)
+-  Argo CD (GitOps)
+-  FastAPI (API funcionando pero readiness probe fallando)
 
 ### Próxima Acción Requerida
 

@@ -31,16 +31,16 @@ Este documento describe la implementación completa de una plataforma MLOps End-
 
 | Objetivo | Estado | Evidencia |
 |----------|--------|-----------|
-| Pipeline automatizado de ML | ✅ Completado | DAG de Airflow con ingestión, drift detection y entrenamiento |
-| Registro de modelos en MLflow | ✅ Completado | Modelos y artefactos en S3, métricas en PostgreSQL |
-| API de inferencia (FastAPI) | ✅ Completado | Endpoints `/predict` y `/explain` funcionando |
-| Interfaz gráfica (Streamlit) | ✅ Completado | UI con predicción y visualización SHAP |
-| CI/CD con GitHub Actions | ✅ Completado | Build y push automático de imágenes |
-| GitOps con Argo CD | ✅ Completado | Despliegue declarativo desde Git |
-| Interpretabilidad con SHAP | ✅ Completado | TreeExplainer integrado en API y Frontend |
-| Despliegue 100% Kubernetes | ✅ Completado | Todos los servicios en contenedores |
-| Helm como gestor de paquetes | ✅ Completado | Airflow, MLflow, PostgreSQL via Helm |
-| Airflow sincronizado con Git | ✅ Completado | Git-Sync sidecar para DAGs |
+| Pipeline automatizado de ML |  Completado | DAG de Airflow con ingestión, drift detection y entrenamiento |
+| Registro de modelos en MLflow |  Completado | Modelos y artefactos en S3, métricas en PostgreSQL |
+| API de inferencia (FastAPI) |  Completado | Endpoints `/predict` y `/explain` funcionando |
+| Interfaz gráfica (Streamlit) |  Completado | UI con predicción y visualización SHAP |
+| CI/CD con GitHub Actions |  Completado | Build y push automático de imágenes |
+| GitOps con Argo CD |  Completado | Despliegue declarativo desde Git |
+| Interpretabilidad con SHAP |  Completado | TreeExplainer integrado en API y Frontend |
+| Despliegue 100% Kubernetes |  Completado | Todos los servicios en contenedores |
+| Helm como gestor de paquetes |  Completado | Airflow, MLflow, PostgreSQL via Helm |
+| Airflow sincronizado con Git |  Completado | Git-Sync sidecar para DAGs |
 
 ### 1.2 Stack Tecnológico
 
@@ -81,30 +81,30 @@ Este documento describe la implementación completa de una plataforma MLOps End-
 graph TD
     subgraph K3d_Cluster [K3d Cluster]
         subgraph Namespace_ArgoCD [Namespace: argocd]
-            ArgoCD[("🐙 Argo CD")]
+            ArgoCD[(" Argo CD")]
         end
         
         subgraph Namespace_MLOps [Namespace: mlops]
             direction TB
             
             subgraph Data_Layer [Data & Storage]
-                SeaweedFS[("🍃 SeaweedFS (S3)")]
-                PostgreSQL[("🐘 PostgreSQL")]
+                SeaweedFS[(" SeaweedFS (S3)")]
+                PostgreSQL[(" PostgreSQL")]
             end
             
             subgraph Orchestration [Orchestration & Tracking]
-                Airflow[("💨 Airflow")]
-                MLflow[("🧪 MLflow")]
+                Airflow[(" Airflow")]
+                MLflow[(" MLflow")]
             end
             
             subgraph Inference [Inference & UI]
-                FastAPI[("⚡ FastAPI")]
-                Streamlit[("🖥️ Streamlit")]
+                FastAPI[(" FastAPI")]
+                Streamlit[(" Streamlit")]
             end
             
             subgraph Observability [Observability]
-                Prometheus[("🔥 Prometheus")]
-                Grafana[("📊 Grafana")]
+                Prometheus[(" Prometheus")]
+                Grafana[(" Grafana")]
             end
         end
     end
@@ -134,12 +134,12 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant Ext as 🌐 External API
-    participant AF as 💨 Airflow
-    participant S3 as 🍃 SeaweedFS
-    participant ML as 🧪 MLflow
-    participant API as ⚡ FastAPI
-    participant UI as 🖥️ Streamlit
+    participant Ext as  External API
+    participant AF as  Airflow
+    participant S3 as  SeaweedFS
+    participant ML as  MLflow
+    participant API as  FastAPI
+    participant UI as  Streamlit
 
     Note over AF: 1. Ingestion & Drift Check
     AF->>Ext: Fetch Data Batch
@@ -468,14 +468,14 @@ def load_latest_model():
 
 ```mermaid
 graph LR
-    Start((Start)) --> Ingest[📥 Ingest Data]
-    Ingest --> Drift{📉 Check Drift}
+    Start((Start)) --> Ingest[ Ingest Data]
+    Ingest --> Drift{ Check Drift}
     
-    Drift -->|Yes| Train[🏋️ Train Model]
+    Drift -->|Yes| Train[ Train Model]
     Drift -->|No| End((End))
     
-    Train --> Promote{🏆 Promote?}
-    Promote -->|Yes| Reload[🔄 Reload API]
+    Train --> Promote{ Promote?}
+    Promote -->|Yes| Reload[ Reload API]
     Promote -->|No| End
     
     Reload --> End
@@ -572,12 +572,12 @@ Se ha implementado un script de verificación (`scripts/verify_e2e.sh`) que vali
 
 | Componente | Prueba | Resultado |
 |------------|--------|-----------|
-| **Infraestructura** | Estado de Pods | ✅ Running (100%) |
-| **Orquestación** | Trigger DAG | ✅ Pipeline Running |
-| **API** | Health Check | ✅ `{"status": "healthy"}` |
-| **Inferencia** | `/predict` | ✅ Precio estimado retornado |
-| **Explicabilidad** | `/explain` | ✅ SHAP values retornados |
-| **Tracking** | MLflow UI | ✅ HTTP 200 OK |
+| **Infraestructura** | Estado de Pods |  Running (100%) |
+| **Orquestación** | Trigger DAG |  Pipeline Running |
+| **API** | Health Check |  `{"status": "healthy"}` |
+| **Inferencia** | `/predict` |  Precio estimado retornado |
+| **Explicabilidad** | `/explain` |  SHAP values retornados |
+| **Tracking** | MLflow UI |  HTTP 200 OK |
 
 ### 6.2 Validación de CI/CD (GitHub Actions)
 
@@ -877,12 +877,12 @@ for b in s3.list_buckets()['Buckets']:
 
 | Criterio | Estado |
 |----------|--------|
-| Todo en Kubernetes | ✅ |
-| Helm como gestor | ✅ |
-| Argo CD para CD | ✅ |
-| Airflow con Git-Sync | ✅ |
-| Buckets automáticos | ✅ |
-| SHAP implementado | ✅ |
+| Todo en Kubernetes |  |
+| Helm como gestor |  |
+| Argo CD para CD |  |
+| Airflow con Git-Sync |  |
+| Buckets automáticos |  |
+| SHAP implementado |  |
 
 ### 10.3 Métricas del Sistema
 

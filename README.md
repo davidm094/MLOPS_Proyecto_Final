@@ -13,36 +13,36 @@ Este repositorio contiene la implementación completa de una plataforma MLOps En
 ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)
 
 
-## 🏗 Arquitectura
+##  Arquitectura
 
 ```mermaid
 graph TD
     subgraph K3d_Cluster [K3d Cluster]
         subgraph Namespace_ArgoCD [Namespace: argocd]
-            ArgoCD[("🐙 Argo CD")]
+            ArgoCD[(" Argo CD")]
         end
         
         subgraph Namespace_MLOps [Namespace: mlops]
             direction TB
             
             subgraph Data_Layer [Data & Storage]
-                SeaweedFS[("🍃 SeaweedFS (S3)")]
-                PostgreSQL[("🐘 PostgreSQL")]
+                SeaweedFS[(" SeaweedFS (S3)")]
+                PostgreSQL[(" PostgreSQL")]
             end
             
             subgraph Orchestration [Orchestration & Tracking]
-                Airflow[("💨 Airflow")]
-                MLflow[("🧪 MLflow")]
+                Airflow[(" Airflow")]
+                MLflow[(" MLflow")]
             end
             
             subgraph Inference [Inference & UI]
-                FastAPI[("⚡ FastAPI")]
-                Streamlit[("🖥️ Streamlit")]
+                FastAPI[(" FastAPI")]
+                Streamlit[(" Streamlit")]
             end
             
             subgraph Observability [Observability]
-                Prometheus[("🔥 Prometheus")]
-                Grafana[("📊 Grafana")]
+                Prometheus[(" Prometheus")]
+                Grafana[(" Grafana")]
             end
         end
     end
@@ -87,7 +87,7 @@ graph TD
 - **CI/CD:** GitHub Actions para build, test y push de imágenes Docker
 - **Monitoring:** Prometheus + Grafana con dashboards y alertas
 
-## 🚀 Inicio Rápido
+##  Inicio Rápido
 
 ### Prerequisitos
 - Docker Desktop (Windows/macOS) o Docker Engine (Linux)
@@ -113,15 +113,15 @@ chmod +x scripts/*.sh
 **Tiempo estimado:** 5-7 minutos
 
 Este script:
-1. ✅ Crea un cluster K3d con puertos mapeados
-2. ✅ Instala y configura Argo CD
-3. ✅ Despliega toda la infraestructura (Postgres, SeaweedFS)
-4. ✅ Despliega las aplicaciones MLOps (Airflow, MLflow, API, Frontend)
-5. ✅ Despliega observabilidad (Prometheus, Grafana)
-6. ✅ Crea buckets S3 y tablas PostgreSQL necesarias
-7. ✅ Muestra las URLs de acceso y credenciales
+1.  Crea un cluster K3d con puertos mapeados
+2.  Instala y configura Argo CD
+3.  Despliega toda la infraestructura (Postgres, SeaweedFS)
+4.  Despliega las aplicaciones MLOps (Airflow, MLflow, API, Frontend)
+5.  Despliega observabilidad (Prometheus, Grafana)
+6.  Crea buckets S3 y tablas PostgreSQL necesarias
+7.  Muestra las URLs de acceso y credenciales
 
-## 🌐 Acceso a Servicios
+##  Acceso a Servicios
 
 | Servicio | URL | Credenciales |
 |----------|-----|--------------|
@@ -138,19 +138,19 @@ Este script:
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d && echo
 ```
 
-## 🤖 Pipeline de Machine Learning
+##  Pipeline de Machine Learning
 
 ### Flujo del DAG
 ```mermaid
 graph LR
-    Start((Start)) --> Ingest[📥 Ingest Data]
-    Ingest --> Drift{📉 Check Drift}
+    Start((Start)) --> Ingest[ Ingest Data]
+    Ingest --> Drift{ Check Drift}
     
-    Drift -->|Yes| Train[🏋️ Train Model]
+    Drift -->|Yes| Train[ Train Model]
     Drift -->|No| End((End))
     
-    Train --> Promote{🏆 Promote?}
-    Promote -->|Yes| Reload[🔄 Reload API]
+    Train --> Promote{ Promote?}
+    Promote -->|Yes| Reload[ Reload API]
     Promote -->|No| End
     
     Reload --> End
@@ -198,7 +198,7 @@ El modelo se promueve automáticamente a "Production" si:
 - R² ≥ 0.35
 - RMSE ≤ $700,000
 
-## 🔍 Explicabilidad con SHAP
+##  Explicabilidad con SHAP
 
 ### ¿Qué es SHAP?
 SHAP (SHapley Additive exPlanations) es una técnica que explica las predicciones de modelos ML asignando a cada feature un valor de importancia para cada predicción individual.
@@ -231,7 +231,7 @@ SHAP (SHapley Additive exPlanations) es una técnica que explica las prediccione
 }
 ```
 
-## 📊 Observabilidad
+##  Observabilidad
 
 ### Prometheus Metrics
 La API expone métricas en `/metrics`:
@@ -252,7 +252,7 @@ Accede a http://localhost:30300 (admin/admin) para ver:
 - Error rate > 5%
 - Modelo no cargado > 2 minutos
 
-## 🗄️ Almacenamiento de Datos
+##  Almacenamiento de Datos
 
 ### PostgreSQL Tables
 - `raw_data` - Datos crudos de la API externa
@@ -266,7 +266,7 @@ Accede a http://localhost:30300 (admin/admin) para ver:
 - `data-raw` - Backup de datos crudos
 - `airflow-logs` - Logs remotos de Airflow
 
-## 📂 Estructura del Proyecto
+##  Estructura del Proyecto
 
 ```
 .
@@ -312,7 +312,7 @@ Accede a http://localhost:30300 (admin/admin) para ver:
 │       ├── locustfile.py         # Tests de carga
 │       └── locust.conf           # Configuración de Locust
 ├── scripts/
-│   ├── start_mlops.sh            # 🚀 Script principal
+│   ├── start_mlops.sh            #  Script principal
 │   ├── create_cluster.sh
 │   └── bootstrap_argocd.sh
 ├── .github/
@@ -326,14 +326,14 @@ Accede a http://localhost:30300 (admin/admin) para ver:
 └── README.md
 ```
 
-## 📚 Documentación
+##  Documentación
 
 - [Reporte Técnico Completo](docs/TECHNICAL_REPORT.md)
 - [Estado del Proyecto](docs/PROJECT_STATUS.md)
 - [Bitácora de Despliegue](docs/DEPLOYMENT_LOG.md)
 - [Referencias](docs/references/)
 
-## 🧪 Testing
+##  Testing
 
 ### Tests Unitarios
 ```bash
@@ -391,7 +391,7 @@ curl http://localhost:30800/predictions/history?limit=10
 curl -X POST http://localhost:30800/reload
 ```
 
-## 🔄 CI/CD Pipeline
+##  CI/CD Pipeline
 
 ### GitHub Actions
 El workflow `.github/workflows/ci.yaml` incluye:
@@ -415,7 +415,7 @@ kubectl rollout restart deployment/api -n mlops
 kubectl rollout restart deployment/frontend -n mlops
 ```
 
-## 🛠 Comandos Útiles
+##  Comandos Útiles
 
 ### Gestión del Cluster
 ```bash
@@ -454,7 +454,7 @@ kubectl exec -n mlops $(kubectl get pods -n mlops -l app.kubernetes.io/name=post
   -- psql -U postgres -d mlops_data -c "SELECT COUNT(*) FROM inference_logs;"
 ```
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Pods en CrashLoopBackOff
 ```bash
@@ -490,7 +490,7 @@ curl http://localhost:30800/health
 curl -X POST http://localhost:30800/reload
 ```
 
-## 📚 Referencias
+##  Referencias
 
 - [K3d Documentation](https://k3d.io/)
 - [Argo CD Documentation](https://argo-cd.readthedocs.io/)
@@ -503,11 +503,11 @@ curl -X POST http://localhost:30800/reload
 - [Grafana](https://grafana.com/)
 - [Locust](https://locust.io/)
 
-## 👥 Autores
+##  Autores
 Anderson Alvarado 
 David Moreno 
 Juan Peña
 
-## 📄 Licencia
+##  Licencia
 
 Este proyecto es parte de un trabajo académico.

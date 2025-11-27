@@ -131,7 +131,7 @@
 - Deleted corrupted `reference.csv` from S3
 - Re-ran DAG to regenerate with correct format
 
-### Phase 15: MLflow Version Incompatibility ⭐
+### Phase 15: MLflow Version Incompatibility 
 **Timestamp:** 03:45 UTC
 
 #### Issue: `MlflowException: API request to /api/2.0/mlflow/logged-models failed with 404`
@@ -159,17 +159,17 @@ kubectl exec -n mlops $SCHEDULER_POD -c scheduler -- python3 -c "import mlflow; 
 # Output: 2.9.2
 ```
 
-### Phase 16: Full Pipeline Test ✅
+### Phase 16: Full Pipeline Test 
 **Timestamp:** 03:59 UTC
 
 #### Successful End-to-End Test:
 ```
-1. Loading data...     ✅ 361,457 rows from S3
-2. Cleaning...         ✅ Features prepared
-3. Training...         ✅ RandomForest (n=50, depth=10)
+1. Loading data...      361,457 rows from S3
+2. Cleaning...          Features prepared
+3. Training...          RandomForest (n=50, depth=10)
    RMSE: 1,448,040
-4. SHAP...             ✅ TreeExplainer generated
-5. MLflow...           ✅ Run ID: d5da15bba06041fcab761bb3335e96bc
+4. SHAP...              TreeExplainer generated
+5. MLflow...            Run ID: d5da15bba06041fcab761bb3335e96bc
 ```
 
 #### Artifacts Saved to S3:
@@ -202,30 +202,30 @@ kubectl exec -n mlops $SCHEDULER_POD -c scheduler -- python3 -c "import mlflow; 
 
 ## Current Status
 
-### ✅ Completed Components:
+###  Completed Components:
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| K3d Cluster | ✅ Running | 1 server + 1 agent |
-| Argo CD | ✅ Deployed | GitOps management |
-| PostgreSQL | ✅ Running | Metadata for Airflow & MLflow |
-| SeaweedFS | ✅ Running | S3-compatible storage |
-| Airflow | ✅ Running | v2 image with mlflow==2.9.2 |
-| MLflow | ✅ Running | Experiment tracking |
-| API (FastAPI) | ✅ Deployed | Prediction & SHAP endpoints |
-| Frontend (Streamlit) | ✅ Deployed | Interactive UI |
+| K3d Cluster |  Running | 1 server + 1 agent |
+| Argo CD |  Deployed | GitOps management |
+| PostgreSQL |  Running | Metadata for Airflow & MLflow |
+| SeaweedFS |  Running | S3-compatible storage |
+| Airflow |  Running | v2 image with mlflow==2.9.2 |
+| MLflow |  Running | Experiment tracking |
+| API (FastAPI) |  Deployed | Prediction & SHAP endpoints |
+| Frontend (Streamlit) |  Deployed | Interactive UI |
 
-### ✅ ML Pipeline Status:
+###  ML Pipeline Status:
 
 | Step | Status | Details |
 |------|--------|---------|
-| Data Ingestion | ✅ | API → S3 (361k rows) |
-| Data Cleaning | ✅ | Handles missing values |
-| Drift Detection | ✅ | KS-test on numerical features |
-| Model Training | ✅ | RandomForest, logged to MLflow |
-| SHAP Explainer | ✅ | TreeExplainer saved as artifact |
-| Model Serving | ✅ | FastAPI loads from S3 |
-| Interpretability | ✅ | SHAP waterfall in Streamlit |
+| Data Ingestion |  | API → S3 (361k rows) |
+| Data Cleaning |  | Handles missing values |
+| Drift Detection |  | KS-test on numerical features |
+| Model Training |  | RandomForest, logged to MLflow |
+| SHAP Explainer |  | TreeExplainer saved as artifact |
+| Model Serving |  | FastAPI loads from S3 |
+| Interpretability |  | SHAP waterfall in Streamlit |
 
 ### Access URLs:
 | Service | URL | Credentials |
@@ -278,7 +278,7 @@ kubectl exec -n mlops $SCHEDULER_POD -c scheduler -- python3 -c "import mlflow; 
   2. Fixed imports to use starlette.middleware.base.
   3. Moved middleware registration to global scope.
   4. Fixed CI/CD build errors in Airflow Dockerfile.
-- **Status:** ✅ **SUCCESS**
+- **Status:**  **SUCCESS**
   - All pods Running (1/1).
   - API responding 200 OK to /ready.
   - Argo CD Healthy and Synced.
