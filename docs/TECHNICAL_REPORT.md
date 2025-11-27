@@ -562,7 +562,37 @@ def train_and_log_model(train_df, experiment_name):
 
 ---
 
-## 6. Interpretabilidad con SHAP
+## 6. Verificación y Validación
+
+### 6.1 Pruebas End-to-End (Automatizadas)
+
+Se ha implementado un script de verificación (`scripts/verify_e2e.sh`) que valida el ciclo completo del sistema.
+
+**Resultados de la última ejecución:**
+
+| Componente | Prueba | Resultado |
+|------------|--------|-----------|
+| **Infraestructura** | Estado de Pods | ✅ Running (100%) |
+| **Orquestación** | Trigger DAG | ✅ Pipeline Running |
+| **API** | Health Check | ✅ `{"status": "healthy"}` |
+| **Inferencia** | `/predict` | ✅ Precio estimado retornado |
+| **Explicabilidad** | `/explain` | ✅ SHAP values retornados |
+| **Tracking** | MLflow UI | ✅ HTTP 200 OK |
+
+### 6.2 Validación de CI/CD (GitHub Actions)
+
+La implementación de CI/CD se verifica mediante tres mecanismos:
+
+1.  **Status Badge:** Visible en el `README.md`, indicando el estado del último build.
+2.  **Workflow History:** Disponible en la pestaña "Actions" del repositorio, mostrando el historial de ejecuciones.
+3.  **Live Demo:** Cada commit a `main` dispara el workflow `ci.yaml`, que ejecuta:
+    *   Unit Tests (Pytest)
+    *   Linting (Flake8/Black)
+    *   Docker Build & Push (DockerHub)
+
+---
+
+## 7. Interpretabilidad con SHAP
 
 ### 6.1 Implementación
 
