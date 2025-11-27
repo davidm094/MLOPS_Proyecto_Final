@@ -2,7 +2,7 @@
 
 **Fecha:** 25 de Noviembre 2025  
 **Repositorio:** https://github.com/davidm094/MLOPS_Proyecto_Final  
-**Última Actualización:** Commit `e9e8ad6` - Fix definitivo para endpoint `/ready`
+**Última Actualización:** Commit `e9e8ad6` - Fix definitivo para endpoint `/ready` (Verificado End-to-End)
 
 ---
 
