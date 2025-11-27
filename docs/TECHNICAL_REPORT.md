@@ -81,30 +81,30 @@ Este documento describe la implementación completa de una plataforma MLOps End-
 graph TD
     subgraph K3d_Cluster [K3d Cluster]
         subgraph Namespace_ArgoCD [Namespace: argocd]
-            ArgoCD[(" Argo CD")]
+            ArgoCD[("🐙 Argo CD")]
         end
         
         subgraph Namespace_MLOps [Namespace: mlops]
             direction TB
             
             subgraph Data_Layer [Data & Storage]
-                SeaweedFS[(" SeaweedFS (S3)")]
-                PostgreSQL[(" PostgreSQL")]
+                SeaweedFS[("🍃 SeaweedFS (S3)")]
+                PostgreSQL[("🐘 PostgreSQL")]
             end
             
             subgraph Orchestration [Orchestration & Tracking]
-                Airflow[(" Airflow")]
-                MLflow[(" MLflow")]
+                Airflow[("💨 Airflow")]
+                MLflow[("🧪 MLflow")]
             end
             
             subgraph Inference [Inference & UI]
-                FastAPI[(" FastAPI")]
-                Streamlit[(" Streamlit")]
+                FastAPI[("⚡ FastAPI")]
+                Streamlit[("🖥️ Streamlit")]
             end
             
             subgraph Observability [Observability]
-                Prometheus[(" Prometheus")]
-                Grafana[(" Grafana")]
+                Prometheus[("🔥 Prometheus")]
+                Grafana[("📊 Grafana")]
             end
         end
     end
@@ -134,12 +134,12 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant Ext as  External API
-    participant AF as  Airflow
-    participant S3 as  SeaweedFS
-    participant ML as  MLflow
-    participant API as  FastAPI
-    participant UI as  Streamlit
+    participant Ext as 🌐 External API
+    participant AF as 💨 Airflow
+    participant S3 as 🍃 SeaweedFS
+    participant ML as 🧪 MLflow
+    participant API as ⚡ FastAPI
+    participant UI as 🖥️ Streamlit
 
     Note over AF: 1. Ingestion & Drift Check
     AF->>Ext: Fetch Data Batch
@@ -468,14 +468,14 @@ def load_latest_model():
 
 ```mermaid
 graph LR
-    Start((Start)) --> Ingest[ Ingest Data]
-    Ingest --> Drift{ Check Drift}
+    Start((Start)) --> Ingest[📥 Ingest Data]
+    Ingest --> Drift{📉 Check Drift}
     
-    Drift -->|Yes| Train[ Train Model]
+    Drift -->|Yes| Train[🏋️ Train Model]
     Drift -->|No| End((End))
     
-    Train --> Promote{ Promote?}
-    Promote -->|Yes| Reload[ Reload API]
+    Train --> Promote{🏆 Promote?}
+    Promote -->|Yes| Reload[🔄 Reload API]
     Promote -->|No| End
     
     Reload --> End

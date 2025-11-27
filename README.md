@@ -19,30 +19,30 @@ Este repositorio contiene la implementación completa de una plataforma MLOps En
 graph TD
     subgraph K3d_Cluster [K3d Cluster]
         subgraph Namespace_ArgoCD [Namespace: argocd]
-            ArgoCD[(" Argo CD")]
+            ArgoCD[("🐙 Argo CD")]
         end
         
         subgraph Namespace_MLOps [Namespace: mlops]
             direction TB
             
             subgraph Data_Layer [Data & Storage]
-                SeaweedFS[(" SeaweedFS (S3)")]
-                PostgreSQL[(" PostgreSQL")]
+                SeaweedFS[("🍃 SeaweedFS (S3)")]
+                PostgreSQL[("🐘 PostgreSQL")]
             end
             
             subgraph Orchestration [Orchestration & Tracking]
-                Airflow[(" Airflow")]
-                MLflow[(" MLflow")]
+                Airflow[("💨 Airflow")]
+                MLflow[("🧪 MLflow")]
             end
             
             subgraph Inference [Inference & UI]
-                FastAPI[(" FastAPI")]
-                Streamlit[(" Streamlit")]
+                FastAPI[("⚡ FastAPI")]
+                Streamlit[("🖥️ Streamlit")]
             end
             
             subgraph Observability [Observability]
-                Prometheus[(" Prometheus")]
-                Grafana[(" Grafana")]
+                Prometheus[("🔥 Prometheus")]
+                Grafana[("📊 Grafana")]
             end
         end
     end
