@@ -169,9 +169,9 @@ def load_production_model():
                 
                 s3 = get_s3_client()
                 
-                # Load model
+                # Load model (experiment ID is 1)
                 try:
-                    model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/model/model.pkl")
+                    model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/model/model.pkl")
                     model = joblib.load(BytesIO(model_obj['Body'].read()))
                     logger.info("Model loaded successfully")
                 except Exception as e:
@@ -180,7 +180,7 @@ def load_production_model():
                 
                 # Load state_means
                 try:
-                    state_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/state_means.pkl")
+                    state_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/state_means.pkl")
                     state_means = joblib.load(BytesIO(state_obj['Body'].read()))
                     logger.info(f"Loaded state_means with {len(state_means)} states")
                 except Exception as e:
@@ -189,17 +189,19 @@ def load_production_model():
                 
                 # Load feature names
                 try:
-                    feat_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/features.txt")
+                    feat_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/features.txt")
                     feature_names = feat_obj['Body'].read().decode('utf-8').strip().split('\n')
                     logger.info(f"Feature names: {feature_names}")
                 except Exception as e:
                     logger.warning(f"Could not load feature names: {e}")
                     feature_names = ['bed', 'bath', 'acre_lot', 'house_size']
                 
-                # Create SHAP explainer
+                # Create SHAP explainer using fitted_model (without preprocessing)
                 try:
-                    explainer = shap.TreeExplainer(model)
-                    logger.info("SHAP Explainer created")
+                    fitted_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/fitted_model.pkl")
+                    fitted_model = joblib.load(BytesIO(fitted_obj['Body'].read()))
+                    explainer = shap.TreeExplainer(fitted_model)
+                    logger.info("SHAP Explainer created from fitted_model")
                 except Exception as e:
                     logger.warning(f"Could not create explainer: {e}")
                     explainer = None
@@ -259,23 +261,25 @@ def load_latest_model_from_s3():
         
         logger.info(f"Loading model from run: {model_run_id}")
         
-        model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/model/model.pkl")
+        model_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/model/model.pkl")
         model = joblib.load(BytesIO(model_obj['Body'].read()))
         
         try:
-            state_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/state_means.pkl")
+            state_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/state_means.pkl")
             state_means = joblib.load(BytesIO(state_obj['Body'].read()))
         except:
             state_means = {}
         
         try:
-            feat_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"2/{model_run_id}/artifacts/features.txt")
+            feat_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/features.txt")
             feature_names = feat_obj['Body'].read().decode('utf-8').strip().split('\n')
         except:
             feature_names = ['bed', 'bath', 'acre_lot', 'house_size']
         
         try:
-            explainer = shap.TreeExplainer(model)
+            fitted_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/fitted_model.pkl")
+            fitted_model = joblib.load(BytesIO(fitted_obj['Body'].read()))
+            explainer = shap.TreeExplainer(fitted_model)
         except:
             explainer = None
         
@@ -521,12 +525,21 @@ def explain(input_data: PropertyInput):
         df = prepare_features(input_data)
         prediction = model.predict(df)
         
-        shap_values = explainer.shap_values(df)
+        # Transform data through the preprocessor before SHAP
+        # The model is TransformedTargetRegressor -> Pipeline (preprocessor + model)
+        try:
+            preprocessor = model.regressor_.named_steps['preprocessor']
+            df_transformed = preprocessor.transform(df)
+        except Exception as e:
+            logger.warning(f"Could not transform data for SHAP: {e}, using raw")
+            df_transformed = df.values
+        
+        shap_values = explainer.shap_values(df_transformed)
         
         if isinstance(shap_values, list):
-            shap_vals = shap_values[0][0]
+            shap_vals = shap_values[0][0] if len(shap_values[0].shape) > 1 else shap_values[0]
         else:
-            shap_vals = shap_values[0]
+            shap_vals = shap_values[0] if len(shap_values.shape) > 1 else shap_values
         
         if hasattr(explainer, 'expected_value'):
             if isinstance(explainer.expected_value, (list, np.ndarray)):

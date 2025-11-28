@@ -296,12 +296,14 @@ def train_and_log_model(train_df, experiment_name="real_estate_price_prediction"
             logging.info(f"CV R2: {np.mean(cv_scores):.4f} (+/- {np.std(cv_scores):.4f})")
             
             # Save and log model
-            # Extract the actual fitted model for direct use
-            fitted_model = model.regressor_.named_steps['model']
-            
-            # Save model.pkl
-            joblib.dump(fitted_model, "model.pkl")
+            # Save the complete model (includes preprocessing and log transform)
+            joblib.dump(model, "model.pkl")
             mlflow.log_artifact("model.pkl", "model")
+            
+            # Also save just the fitted model for SHAP
+            fitted_model = model.regressor_.named_steps['model']
+            joblib.dump(fitted_model, "fitted_model.pkl")
+            mlflow.log_artifact("fitted_model.pkl")
             
             # Save state_means.pkl
             joblib.dump(state_means, "state_means.pkl")

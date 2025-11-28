@@ -226,10 +226,9 @@ def get_reference_data():
         if len(batches) >= 2:
             # Return second-to-last batch as reference
             reference_batch = batches.iloc[1]['batch_id']
-        elif len(batches) == 1:
-            # Only one batch, use it as reference
-            reference_batch = batches.iloc[0]['batch_id']
         else:
+            # Only one batch or none - return None to force training on first run
+            logging.info("Only one batch exists, returning None to trigger initial training")
             return None
         
         return load_from_postgres('raw_data', batch_id=reference_batch)
