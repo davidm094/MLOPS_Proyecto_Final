@@ -1,5 +1,7 @@
 # MLOps Proyecto Final - End-to-End Kubernetes Platform
 
+## Enlace de video explicatorio: https://youtu.be/NxmnR7Bbogc
+
 Este repositorio contiene la implementación completa de una plataforma MLOps End-to-End desplegada sobre Kubernetes (K3d) y gestionada vía GitOps con Argo CD.
 
 ![CI Pipeline](https://github.com/davidm094/MLOPS_Proyecto_Final/actions/workflows/ci.yaml/badge.svg)
