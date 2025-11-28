@@ -56,14 +56,14 @@ spec:
         images:
           airflow:
             repository: davidm094/mlops-airflow
-            tag: v4
+            tag: latest
             pullPolicy: Always
         
         # 2. Legacy Chart Structure
         airflow:
           image:
             repository: davidm094/mlops-airflow
-            tag: v4
+            tag: latest
             pullPolicy: Always
 
         # 3. Global Defaults (Very Old Charts)
