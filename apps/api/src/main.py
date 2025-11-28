@@ -212,12 +212,14 @@ def load_production_model():
                     logger.warning(f"Could not load feature names: {e}")
                     feature_names = ['bed', 'bath', 'acre_lot', 'house_size']
                 
-                # Create SHAP explainer using fitted_model (without preprocessing)
+                # Create SHAP explainer using KernelExplainer (compatible with all models)
                 try:
                     fitted_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/fitted_model.pkl")
                     fitted_model = joblib.load(BytesIO(fitted_obj['Body'].read()))
-                    explainer = shap.TreeExplainer(fitted_model)
-                    logger.info("SHAP Explainer created from fitted_model")
+                    # Background data for KernelExplainer (typical house values)
+                    background = np.array([[3, 2, 0.25, 1800, 500000, 0, 6, 450, 600, 5, 6.0]])
+                    explainer = shap.KernelExplainer(fitted_model.predict, background)
+                    logger.info("SHAP KernelExplainer created successfully")
                 except Exception as e:
                     logger.warning(f"Could not create explainer: {e}")
                     explainer = None
@@ -295,7 +297,8 @@ def load_latest_model_from_s3():
         try:
             fitted_obj = s3.get_object(Bucket=MLFLOW_BUCKET, Key=f"1/{model_run_id}/artifacts/fitted_model.pkl")
             fitted_model = joblib.load(BytesIO(fitted_obj['Body'].read()))
-            explainer = shap.TreeExplainer(fitted_model)
+            background = np.array([[3, 2, 0.25, 1800, 500000, 0, 6, 450, 600, 5, 6.0]])
+            explainer = shap.KernelExplainer(fitted_model.predict, background)
         except:
             explainer = None
         
