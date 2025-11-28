@@ -8,6 +8,7 @@ boto3
 psycopg2-binary
 numpy
 joblib
+dill
 sqlalchemy
 prometheus-client
 xgboost
