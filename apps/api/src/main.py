@@ -23,6 +23,22 @@ from starlette.responses import Response
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Log transform functions (must match training code for model deserialization)
+def log_transform(y):
+    """Log transform for target variable."""
+    return np.log1p(y)
+
+def inverse_log_transform(y):
+    """Inverse log transform."""
+    return np.expm1(y)
+
+# Register in module for joblib deserialization
+import sys
+sys.modules['src'] = type(sys)('src')
+sys.modules['src.model_training'] = type(sys)('src.model_training')
+sys.modules['src.model_training'].log_transform = log_transform
+sys.modules['src.model_training'].inverse_log_transform = inverse_log_transform
+
 app = FastAPI(title="Real Estate Price Prediction API", version="5.0")
 
 # ============================================
